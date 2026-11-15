@@ -62,6 +62,8 @@ export function SettingsView({ game }: { game: Game }) {
         <small>Gilt ab den Quests von morgen.</small>
       </fieldset>
 
+      <HealthSection game={game} />
+
       <CustomQuests game={game} />
       <BuiltInQuests game={game} />
 
@@ -272,5 +274,59 @@ function BuiltInQuests({ game }: { game: Game }) {
         })}
       </ul>
     </fieldset>
+  );
+}
+
+function HealthSection({ game }: { game: Game }) {
+  const { state, health } = game;
+  const last = state.health.lastSync ? new Date(state.health.lastSync) : null;
+
+  if (!health.supported) {
+    return (
+      <div className="field">
+        <span>Samsung Health</span>
+        <p className="small-text">
+          Schritte und Läufe aus Samsung Health kann nur die Android-App lesen, nicht die Browser-Version. Lade die neueste APK unter
+          „Releases“ im GitHub-Repository herunter und installiere sie. Dein Fortschritt zieht über „Backup speichern“ und „Backup laden“ mit.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="field">
+      <span>Samsung Health</span>
+      {state.health.connected ? (
+        <>
+          <p className="small-text">
+            Verbunden über Health Connect. Schritt- und Lauf-Quests haken sich selbst ab, und deine Schritte und Läufe treffen Gegner automatisch.
+            {last && ` Zuletzt abgeglichen: ${last.toLocaleString('de-DE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.`}
+          </p>
+          <div className="row">
+            <button className="secondary" onClick={health.sync} disabled={health.syncing}>
+              {health.syncing ? 'Gleiche ab …' : 'Jetzt abgleichen'}
+            </button>
+            <button className="secondary" onClick={health.disconnect}>
+              Trennen
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="small-text">
+            So geht's: Öffne Samsung Health, tippe auf ⋮ → Einstellungen → Health Connect und erlaube Samsung Health, Schritte und Training zu teilen.
+            Danach hier verbinden und Questfit den Lesezugriff erlauben.
+          </p>
+          <button className="primary" onClick={health.connect}>
+            Mit Health Connect verbinden
+          </button>
+        </>
+      )}
+      {health.error && (
+        <p className="error" role="alert">
+          {health.error}
+        </p>
+      )}
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   formatDate,
   isCleared,
   isDailyInstance,
+  isTrackedQuest,
   rankFor,
   seasonOver,
   seasonDay,
@@ -79,6 +80,7 @@ export function TodayView({ game, today }: { game: Game; today: string }) {
             key={q.id}
             quest={q}
             canReroll={canReroll && !isDailyInstance(state, q)}
+            tracked={state.health.connected && isTrackedQuest(q.templateId) ? healthValue(state, today, q.templateId) : null}
             onToggle={game.toggleQuest}
             onReroll={game.reroll}
           />
@@ -100,8 +102,20 @@ export function TodayView({ game, today }: { game: Game; today: string }) {
   );
 }
 
-function QuestRow(props: { quest: QuestInstance; canReroll: boolean; onToggle: (id: string) => void; onReroll: (id: string) => void }) {
-  const { quest: q, canReroll, onToggle, onReroll } = props;
+function healthValue(state: GameState, today: string, templateId: string): number {
+  const h = state.health.days[today];
+  if (!h) return 0;
+  return templateId === 'steps' ? h.steps : h.runKm;
+}
+
+function QuestRow(props: {
+  quest: QuestInstance;
+  canReroll: boolean;
+  tracked: number | null;
+  onToggle: (id: string) => void;
+  onReroll: (id: string) => void;
+}) {
+  const { quest: q, canReroll, tracked, onToggle, onReroll } = props;
   const [burst, setBurst] = useState(0);
 
   const toggle = () => {
@@ -120,7 +134,11 @@ function QuestRow(props: { quest: QuestInstance; canReroll: boolean; onToggle: (
         </span>
         <span className="quest-text">
           <span className="quest-title">{q.title}</span>
-          <span className="quest-attr">{ATTR_LABEL[q.attr]}</span>
+          <span className="quest-attr">
+            {tracked !== null && !q.done
+              ? `${tracked.toLocaleString('de-DE')} von ${q.amount.toLocaleString('de-DE')}, Samsung Health`
+              : ATTR_LABEL[q.attr]}
+          </span>
         </span>
         <span className="quest-amount">
           <span className="display">{q.amount.toLocaleString('de-DE')}</span>

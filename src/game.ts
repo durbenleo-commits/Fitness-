@@ -1,4 +1,5 @@
 // Pure game logic: no React, no storage. Everything here is unit-tested.
+import type { Battle, HealthDay } from './battle';
 
 export type Attr = 'staerke' | 'ausdauer' | 'beweglichkeit' | 'disziplin';
 export type QuestAttr = Exclude<Attr, 'disziplin'>;
@@ -30,6 +31,7 @@ export interface QuestTemplate {
   xp: number;
   custom?: boolean; // made by the player; amount never scales
   daily?: boolean; // custom only: appears every day as an extra quest
+  noLevelScale?: boolean; // grows with difficulty only, not with level
 }
 
 export const QUEST_POOL: QuestTemplate[] = [
@@ -43,6 +45,7 @@ export const QUEST_POOL: QuestTemplate[] = [
   { id: 'walk', title: 'Spaziergang', icon: '👟', attr: 'ausdauer', base: 20, step: 5, unit: 'Min.', xp: 25 },
   { id: 'jacks', title: 'Hampelmänner', icon: '⭐', attr: 'ausdauer', base: 40, step: 5, unit: 'Wdh.', xp: 25 },
   { id: 'burpees', title: 'Burpees', icon: '⚡', attr: 'ausdauer', base: 8, step: 1, unit: 'Wdh.', xp: 40 },
+  { id: 'steps', title: 'Schritte', icon: '👣', attr: 'ausdauer', base: 6000, step: 500, unit: 'Schritte', xp: 30, noLevelScale: true },
   { id: 'stairs', title: 'Treppen steigen', icon: '🪜', attr: 'ausdauer', base: 6, step: 1, unit: 'Stockwerke', xp: 30 },
   { id: 'stretch', title: 'Dehnen', icon: '🧘', attr: 'beweglichkeit', base: 8, step: 1, unit: 'Min.', xp: 25 },
   { id: 'mobility', title: 'Mobility-Routine', icon: '🌀', attr: 'beweglichkeit', base: 10, step: 1, unit: 'Min.', xp: 30 },
@@ -91,6 +94,14 @@ export interface GameState {
   customQuests: QuestTemplate[];
   disabledQuests: string[];
   seasons: SeasonRecord[]; // finished seasons, oldest first
+  battles: Battle[];
+  health: HealthState;
+}
+
+export interface HealthState {
+  connected: boolean;
+  lastSync?: string; // ISO timestamp
+  days: Record<string, HealthDay>;
 }
 
 export const QUESTS_PER_DAY = 4;
@@ -104,6 +115,8 @@ export const emptyState = (): GameState => ({
   customQuests: [],
   disabledQuests: [],
   seasons: [],
+  battles: [],
+  health: { connected: false, days: {} },
 });
 
 // ---------- dates ----------
@@ -233,7 +246,7 @@ export function scaleFactor(level: number, difficulty: Difficulty): number {
 
 export function scaledAmount(t: QuestTemplate, level: number, difficulty: Difficulty): number {
   if (t.custom) return t.base;
-  const raw = t.base * scaleFactor(level, difficulty);
+  const raw = t.base * (t.noLevelScale ? DIFFICULTY_FACTOR[difficulty] : scaleFactor(level, difficulty));
   const rounded = Math.round(raw / t.step) * t.step;
   return Math.max(t.step, Number(rounded.toFixed(1)));
 }
@@ -325,14 +338,22 @@ export const dayXp = (day: DayLog) =>
   day.quests.reduce((s, q) => s + (q.done ? q.xp : 0), 0) + (isCleared(day) ? DAY_CLEAR_BONUS : 0);
 
 export function totalXp(state: GameState, filter: DayFilter = everyDay): number {
-  return daysWhere(state, filter).reduce((s, d) => s + dayXp(d), 0);
+  const quests = daysWhere(state, filter).reduce((s, d) => s + dayXp(d), 0);
+  const battles = state.battles.reduce((s, b) => s + (b.defeatedOn && filter(b.defeatedOn) ? b.xp : 0), 0);
+  return quests + battles;
 }
+
+export const ENEMY_ATTR_POINTS = 2;
+export const BOSS_ATTR_POINTS = 5;
 
 export function attributes(state: GameState): Record<Attr, number> {
   const out: Record<Attr, number> = { staerke: 0, ausdauer: 0, beweglichkeit: 0, disziplin: 0 };
   for (const day of Object.values(state.days)) {
     for (const q of day.quests) if (q.done) out[q.attr] += 1;
     if (isCleared(day)) out.disziplin += 1;
+  }
+  for (const b of state.battles) {
+    if (b.defeatedOn) out[b.attr] += b.boss ? BOSS_ATTR_POINTS : ENEMY_ATTR_POINTS;
   }
   return out;
 }
@@ -397,6 +418,17 @@ export function exerciseTotals(state: GameState): ExerciseTotal[] {
       map.set(q.templateId, e);
     }
   }
+  // Reps logged against enemies count too (not as a separate quest).
+  for (const b of state.battles) {
+    for (const p of b.phases) {
+      if (p.kind !== 'exercise' || !p.exerciseId || p.log.length === 0) continue;
+      const t = QUEST_POOL.find((q) => q.id === p.exerciseId);
+      if (!t) continue;
+      const e = map.get(t.id) ?? { templateId: t.id, title: t.title, icon: t.icon, unit: t.unit, attr: t.attr, count: 0, total: 0 };
+      e.total = Number((e.total + p.log.reduce((s, l) => s + l.amount, 0)).toFixed(1));
+      map.set(t.id, e);
+    }
+  }
   return [...map.values()].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title));
 }
 
@@ -407,9 +439,16 @@ export const totalFor = (state: GameState, templateId: string) =>
 export function dailySeries(state: GameState, dates: string[], metric: 'xp' | string): number[] {
   return dates.map((d) => {
     const day = state.days[d];
-    if (!day) return 0;
-    if (metric === 'xp') return dayXp(day);
-    return day.quests.filter((q) => q.done && q.templateId === metric).reduce((s, q) => s + q.amount, 0);
+    if (metric === 'xp') {
+      const battleXp = state.battles.reduce((s, b) => s + (b.defeatedOn === d ? b.xp : 0), 0);
+      return (day ? dayXp(day) : 0) + battleXp;
+    }
+    const questAmount = day ? day.quests.filter((q) => q.done && q.templateId === metric).reduce((s, q) => s + q.amount, 0) : 0;
+    let battleAmount = 0;
+    for (const b of state.battles)
+      for (const p of b.phases)
+        if (p.exerciseId === metric) for (const l of p.log) if (l.date === d) battleAmount += l.amount;
+    return Number((questAmount + battleAmount).toFixed(1));
   });
 }
 
@@ -477,5 +516,28 @@ export function normalize(s: GameState): GameState {
     customQuests: Array.isArray(s.customQuests) ? s.customQuests : [],
     disabledQuests: Array.isArray(s.disabledQuests) ? s.disabledQuests : [],
     seasons: Array.isArray(s.seasons) ? s.seasons : [],
+    battles: Array.isArray(s.battles) ? s.battles : [],
+    health: s.health && typeof s.health === 'object' ? { connected: !!s.health.connected, lastSync: s.health.lastSync, days: s.health.days ?? {} } : { connected: false, days: {} },
   };
 }
+
+// ---------- health auto-complete ----------
+
+/** Tick off today's step and running quests that the synced health data already covers. */
+export function autoCompleteFromHealth(state: GameState, today: string): GameState {
+  const h = state.health.connected ? state.health.days[today] : undefined;
+  const day = state.days[today];
+  if (!h || !day) return state;
+  let changed = false;
+  const quests = day.quests.map((q) => {
+    if (q.done) return q;
+    const reached = (q.templateId === 'steps' && h.steps >= q.amount) || (q.templateId === 'run' && h.runKm >= q.amount);
+    if (!reached) return q;
+    changed = true;
+    return { ...q, done: true };
+  });
+  return changed ? { ...state, days: { ...state.days, [today]: { ...day, quests } } } : state;
+}
+
+/** Quests that health data can tick off automatically. */
+export const isTrackedQuest = (templateId: string) => templateId === 'steps' || templateId === 'run';

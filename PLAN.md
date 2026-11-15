@@ -15,10 +15,16 @@
 - Verlauf: Diagramm der letzten 14 Tage (XP oder eine Übung), Summen pro Übung
 - Ende der Saison mit Auswertung und Start einer neuen Saison, Liste vergangener Saisons
 
+## Phase 2b: Arena und Samsung Health ✅
+- Täglicher Gegner (manchmal Elite) und Wochen-Boss mit drei Phasen
+- Treffer durch eingetragene Wiederholungen, Minuten, Kilometer oder Schritte
+- Sieg bringt XP und Attributpunkte, neue Erfolge für Siege
+- Android-App (Capacitor) mit Health Connect: Schritte und Läufe aus Samsung Health
+  haken Quests ab und treffen Gegner automatisch
+- GitHub baut bei jedem Push eine signierte APK und legt sie unter „Releases“ ab
+
 ## Phase 3: Feinschliff
 - Wöchentliche Boss-Challenge mit Bonus-XP
 - Sounds und mehr Effekte
 - Erinnerungen (soweit eine PWA das zuverlässig kann)
 
-## Phase 4 (optional): echte APK
-- Mit Capacitor und GitHub Actions eine installierbare APK bauen, ohne Play Store

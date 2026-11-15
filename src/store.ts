@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { ensureBattles, logDamage, settleBattles, undoDamage } from './battle';
 import {
+  autoCompleteFromHealth,
   dailyQuests,
   emptyState,
   generateDay,
@@ -16,6 +18,7 @@ import {
   type Profile,
   type QuestTemplate,
 } from './game';
+import { connectHealth, fetchHealthDays, healthSupported } from './health';
 
 const KEY = 'questfit.state.v1';
 
@@ -62,14 +65,78 @@ export function useGame(today: string) {
 
   useEffect(() => save(state), [state]);
 
-  // Make sure today's quests exist, scaled to the current level.
+  // Make sure today's quests, today's enemy and this week's boss exist, scaled to the current level.
   useEffect(() => {
     setState((s) => {
-      if (!s.profile || s.days[today]) return s;
-      const day = generateDay(today, currentLevel(s), s.profile.difficulty, randomPool(s), dailyQuests(s));
-      return { ...s, days: { ...s.days, [today]: day } };
+      if (!s.profile) return s;
+      let next = s;
+      if (!s.days[today]) {
+        const day = generateDay(today, currentLevel(s), s.profile.difficulty, randomPool(s), dailyQuests(s));
+        next = { ...s, days: { ...s.days, [today]: day } };
+      }
+      return ensureBattles(next, today, currentLevel(next));
     });
   }, [today, state.profile]);
+
+  // Derived bookkeeping: health ticks off quests, finished fights get their victory date.
+  useEffect(() => {
+    const next = settleBattles(autoCompleteFromHealth(state, today), today);
+    if (next !== state) setState(next);
+  }, [state, today]);
+
+  // Health Connect sync: on start, when the app returns to the foreground, and on demand.
+  const [syncing, setSyncing] = useState(false);
+  const [healthError, setHealthError] = useState<string | null>(null);
+
+  const syncHealth = useCallback(async () => {
+    if (!healthSupported()) return;
+    setSyncing(true);
+    try {
+      const days = await fetchHealthDays(today);
+      setState((s) => ({ ...s, health: { connected: true, lastSync: new Date().toISOString(), days: { ...s.health.days, ...days } } }));
+      setHealthError(null);
+    } catch (e) {
+      setHealthError(`Synchronisieren fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSyncing(false);
+    }
+  }, [today]);
+
+  useEffect(() => {
+    if (!state.health.connected || !healthSupported()) return;
+    syncHealth();
+    const onVisible = () => document.visibilityState === 'visible' && syncHealth();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [state.health.connected, syncHealth]);
+
+  const connect = useCallback(async () => {
+    const res = await connectHealth();
+    if (!res.ok) {
+      setHealthError(res.reason);
+      return;
+    }
+    setHealthError(null);
+    setState((s) => ({ ...s, health: { ...s.health, connected: true } }));
+  }, []);
+
+  const disconnect = useCallback(() => {
+    setState((s) => ({ ...s, health: { ...s.health, connected: false } }));
+  }, []);
+
+  const hit = useCallback(
+    (battleId: string, phaseId: string, amount: number) => {
+      setState((s) => ({ ...s, battles: s.battles.map((b) => (b.id === battleId ? logDamage(b, phaseId, today, amount) : b)) }));
+    },
+    [today],
+  );
+
+  const undoHit = useCallback(
+    (battleId: string, phaseId: string) => {
+      setState((s) => ({ ...s, battles: s.battles.map((b) => (b.id === battleId ? undoDamage(b, phaseId, today) : b)) }));
+    },
+    [today],
+  );
 
   const startGame = useCallback((profile: Profile) => {
     setState({ ...emptyState(), profile });
@@ -149,6 +216,9 @@ export function useGame(today: string) {
 
   return {
     state,
+    hit,
+    undoHit,
+    health: { supported: healthSupported(), syncing, error: healthError, connect, disconnect, sync: syncHealth },
     startGame,
     toggleQuest,
     reroll,

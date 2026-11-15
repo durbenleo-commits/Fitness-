@@ -1,0 +1,58 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx cap sync android
+
+      - name: Build signed APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon \
+            -PversionCode=${{ github.run_number }} \
+            -PversionName=0.3.${{ github.run_number }}
+          cp app/build/outputs/apk/release/app-release.apk ../questfit.apk
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: Questfit ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: questfit.apk
+          body: |
+            Android-App von Questfit, Build ${{ github.run_number }}.
+
+            Installieren: questfit.apk auf dem Handy herunterladen und öffnen. Android fragt beim ersten Mal,
+            ob der Browser Apps installieren darf. Neue Versionen installieren sich über die alte, dein Fortschritt bleibt.

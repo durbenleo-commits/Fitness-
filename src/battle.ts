@@ -1,0 +1,293 @@
+// Enemies and bosses: pure logic, unit-tested.
+import {
+  QUEST_POOL,
+  addDays,
+  daysBetween,
+  scaleFactor,
+  type Difficulty,
+  type GameState,
+  type QuestAttr,
+} from './game';
+
+export type MoveKind = 'exercise' | 'steps' | 'run';
+
+interface MoveSpec {
+  kind: MoveKind;
+  exerciseId?: string; // for kind 'exercise': id from QUEST_POOL
+  base: number; // amount at level 1, difficulty 2
+}
+
+export interface EnemyTemplate {
+  id: string;
+  name: string;
+  icon: string;
+  taunt: string;
+  attr: QuestAttr;
+  moves: MoveSpec[];
+}
+
+const ex = (exerciseId: string, base: number): MoveSpec => ({ kind: 'exercise', exerciseId, base });
+const steps = (base: number): MoveSpec => ({ kind: 'steps', base });
+const run = (base: number): MoveSpec => ({ kind: 'run', base });
+
+/** Everyday enemies: they personify bad habits and fall within one day. */
+export const ENEMIES: EnemyTemplate[] = [
+  { id: 'sofa-troll', name: 'Sofa-Troll', icon: '🧌', attr: 'staerke', taunt: 'Bleib doch noch ein bisschen sitzen …', moves: [ex('squats', 30)] },
+  { id: 'snooze-gremlin', name: 'Snooze-Gremlin', icon: '👺', attr: 'ausdauer', taunt: 'Nur noch fünf Minuten.', moves: [ex('jacks', 50)] },
+  { id: 'handy-zombie', name: 'Handy-Zombie', icon: '🧟', attr: 'ausdauer', taunt: 'Scroll weiter. Nur noch ein Video.', moves: [steps(6000)] },
+  { id: 'ausreden-geist', name: 'Ausreden-Geist', icon: '👻', attr: 'beweglichkeit', taunt: 'Heute ist eh zu wenig Zeit.', moves: [ex('stretch', 10)] },
+  { id: 'couch-krake', name: 'Couch-Krake', icon: '🐙', attr: 'staerke', taunt: 'Acht Arme halten dich fest.', moves: [ex('pushups', 15), ex('plank', 45)] },
+  { id: 'chips-golem', name: 'Chips-Golem', icon: '🗿', attr: 'ausdauer', taunt: 'Knusper, knusper.', moves: [ex('burpees', 12)] },
+  { id: 'serien-vampir', name: 'Serien-Vampir', icon: '🧛', attr: 'ausdauer', taunt: 'Nächste Folge startet in 5 Sekunden.', moves: [run(2)] },
+  { id: 'faulpelz', name: 'Faulpelz', icon: '🦥', attr: 'beweglichkeit', taunt: 'Laaangsam. Ganz laaangsam.', moves: [ex('mobility', 8), steps(4000)] },
+  { id: 'zucker-kobold', name: 'Zucker-Kobold', icon: '🍬', attr: 'staerke', taunt: 'Ein Riegel geht noch.', moves: [ex('lunges', 12), ex('wallsit', 45)] },
+];
+
+/** Weekly bosses: three phases, Monday to Sunday. */
+export const BOSSES: EnemyTemplate[] = [
+  { id: 'schweinehund', name: 'Der innere Schweinehund', icon: '🐗', attr: 'staerke', taunt: 'Ich kenne all deine Ausreden.', moves: [ex('pushups', 80), steps(40000), ex('plank', 180)] },
+  { id: 'montags-monster', name: 'Das Montags-Monster', icon: '👹', attr: 'ausdauer', taunt: 'Die Woche gehört mir.', moves: [ex('squats', 150), run(5), ex('stretch', 30)] },
+  { id: 'aufschiebe-drache', name: 'Der Aufschiebe-Drache', icon: '🐉', attr: 'ausdauer', taunt: 'Morgen. Immer erst morgen.', moves: [ex('burpees', 50), steps(50000), ex('mobility', 30)] },
+  { id: 'winterschlaf-baer', name: 'Der Winterschlaf-Bär', icon: '🐻', attr: 'staerke', taunt: 'Draußen ist es viel zu kalt.', moves: [ex('lunges', 80), ex('stairs', 30), ex('wallsit', 300)] },
+  { id: 'ausreden-hydra', name: 'Die Ausreden-Hydra', icon: '🐍', attr: 'beweglichkeit', taunt: 'Schlag einen Kopf ab, zwei wachsen nach.', moves: [ex('pushups', 60), ex('jacks', 200), ex('hips', 20)] },
+];
+
+export interface LogEntry {
+  date: string;
+  amount: number;
+}
+
+export interface BattlePhase {
+  id: string;
+  kind: MoveKind;
+  exerciseId?: string;
+  title: string;
+  icon: string;
+  unit: string;
+  target: number;
+  log: LogEntry[];
+}
+
+export interface Battle {
+  id: string;
+  enemyId: string;
+  name: string;
+  icon: string;
+  taunt: string;
+  attr: QuestAttr;
+  boss: boolean;
+  elite: boolean;
+  start: string;
+  end: string; // inclusive
+  xp: number;
+  phases: BattlePhase[];
+  defeatedOn?: string;
+}
+
+/** Per-day data synced from Health Connect (Samsung Health). */
+export interface HealthDay {
+  steps: number;
+  runKm: number;
+}
+
+// ---------- generation ----------
+
+function mulberry32(seed: number) {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+const DIFF_ONLY: Record<Difficulty, number> = { 1: 0.6, 2: 1, 3: 1.5 };
+
+const roundTo = (v: number, step: number) => Math.max(step, Number((Math.round(v / step) * step).toFixed(1)));
+
+function makePhase(move: MoveSpec, level: number, difficulty: Difficulty, factor: number, idx: number): BattlePhase {
+  if (move.kind === 'steps') {
+    // Steps and distance scale with difficulty only: level-based growth would get unrealistic.
+    return { id: `p${idx}`, kind: 'steps', title: 'Schritte', icon: '👣', unit: 'Schritte', target: roundTo(move.base * DIFF_ONLY[difficulty] * factor, 500), log: [] };
+  }
+  if (move.kind === 'run') {
+    return { id: `p${idx}`, kind: 'run', title: 'Laufen', icon: '🏃', unit: 'km', target: roundTo(move.base * DIFF_ONLY[difficulty] * factor, 0.5), log: [] };
+  }
+  const t = QUEST_POOL.find((q) => q.id === move.exerciseId)!;
+  return {
+    id: `p${idx}`,
+    kind: 'exercise',
+    exerciseId: t.id,
+    title: t.title,
+    icon: t.icon,
+    unit: t.unit,
+    target: roundTo(move.base * scaleFactor(level, difficulty) * factor, t.step),
+    log: [],
+  };
+}
+
+/** Today's everyday enemy. Roughly one in five is an elite with more HP and more XP. */
+export function generateEnemy(date: string, level: number, difficulty: Difficulty): Battle {
+  const rand = mulberry32(hash('enemy' + date));
+  const e = ENEMIES[Math.floor(rand() * ENEMIES.length)];
+  const elite = rand() < 0.2;
+  const factor = elite ? 1.5 : 1;
+  return {
+    id: `enemy-${date}`,
+    enemyId: e.id,
+    name: e.name,
+    icon: e.icon,
+    taunt: e.taunt,
+    attr: e.attr,
+    boss: false,
+    elite,
+    start: date,
+    end: date,
+    xp: Math.round((40 + 4 * level) * (elite ? 1.6 : 1)),
+    phases: e.moves.map((m, i) => makePhase(m, level, difficulty, factor, i)),
+  };
+}
+
+/** Monday of the week that contains `date`. */
+export function weekStart(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const weekday = (new Date(y, m - 1, d, 12).getDay() + 6) % 7; // 0 = Monday
+  return addDays(date, -weekday);
+}
+
+/** A boss appears when at least 4 days of its week are left (Monday to Thursday). */
+export function bossAvailable(date: string): boolean {
+  return daysBetween(date, addDays(weekStart(date), 6)) >= 3;
+}
+
+export function generateBoss(date: string, level: number, difficulty: Difficulty): Battle {
+  const start = weekStart(date);
+  const rand = mulberry32(hash('boss' + start));
+  const b = BOSSES[Math.floor(rand() * BOSSES.length)];
+  return {
+    id: `boss-${start}`,
+    enemyId: b.id,
+    name: b.name,
+    icon: b.icon,
+    taunt: b.taunt,
+    attr: b.attr,
+    boss: true,
+    elite: false,
+    start: date,
+    end: addDays(start, 6),
+    xp: 200 + 15 * level,
+    phases: b.moves.map((m, i) => makePhase(m, level, difficulty, 1, i)),
+  };
+}
+
+// ---------- progress ----------
+
+const inWindow = (b: Battle, date: string) => date >= b.start && date <= b.end;
+
+/** Health-backed phases read from synced data when connected, otherwise from manual entries. */
+export function phaseProgress(b: Battle, p: BattlePhase, health: Record<string, HealthDay> | null): number {
+  if (health && p.kind !== 'exercise') {
+    let sum = 0;
+    for (const [date, h] of Object.entries(health)) {
+      if (inWindow(b, date)) sum += p.kind === 'steps' ? h.steps : h.runKm;
+    }
+    return Number(sum.toFixed(2));
+  }
+  return Number(p.log.reduce((s, l) => s + l.amount, 0).toFixed(2));
+}
+
+export const isComplete = (b: Battle, health: Record<string, HealthDay> | null) =>
+  b.phases.every((p) => phaseProgress(b, p, health) >= p.target);
+
+/** Remaining HP as a share between 0 and 1. */
+export function hpLeft(b: Battle, health: Record<string, HealthDay> | null): number {
+  const done = b.phases.reduce((s, p) => s + Math.min(phaseProgress(b, p, health) / p.target, 1), 0);
+  return 1 - done / b.phases.length;
+}
+
+export type BattleStatus = 'active' | 'defeated' | 'escaped';
+
+export function battleStatus(b: Battle, today: string): BattleStatus {
+  if (b.defeatedOn) return 'defeated';
+  return today > b.end ? 'escaped' : 'active';
+}
+
+export function logDamage(b: Battle, phaseId: string, date: string, amount: number): Battle {
+  if (!inWindow(b, date) || amount === 0) return b;
+  return {
+    ...b,
+    phases: b.phases.map((p) => (p.id === phaseId ? { ...p, log: [...p.log, { date, amount }] } : p)),
+  };
+}
+
+export function undoDamage(b: Battle, phaseId: string, date: string): Battle {
+  return {
+    ...b,
+    phases: b.phases.map((p) => {
+      if (p.id !== phaseId) return p;
+      const idx = p.log.map((l) => l.date).lastIndexOf(date);
+      return idx < 0 ? p : { ...p, log: p.log.filter((_, i) => i !== idx) };
+    }),
+  };
+}
+
+/** Quick-entry amounts per unit. */
+export function quickAmounts(unit: string): number[] {
+  switch (unit) {
+    case 'Sek.':
+      return [10, 30, 60];
+    case 'Min.':
+      return [1, 5, 10];
+    case 'km':
+      return [0.5, 1, 2];
+    case 'Schritte':
+      return [500, 1000, 5000];
+    case 'Stockwerke':
+      return [1, 3, 5];
+    default:
+      return [5, 10, 25];
+  }
+}
+
+/** Ensure today's enemy and this week's boss exist. Returns the same object if nothing changed. */
+export function ensureBattles(state: GameState, today: string, level: number): GameState {
+  if (!state.profile) return state;
+  const add: Battle[] = [];
+  const has = (id: string) => state.battles.some((b) => b.id === id);
+  const enemy = generateEnemy(today, level, state.profile.difficulty);
+  if (!has(enemy.id)) add.push(enemy);
+  if (bossAvailable(today) && !has(`boss-${weekStart(today)}`)) add.push(generateBoss(today, level, state.profile.difficulty));
+  return add.length ? { ...state, battles: [...state.battles, ...add] } : state;
+}
+
+/**
+ * Stamp or clear `defeatedOn` so XP is counted exactly once and follows undo.
+ * Only battles that are still running (or were won) can change.
+ */
+export function settleBattles(state: GameState, today: string): GameState {
+  const health = state.health.connected ? state.health.days : null;
+  let changed = false;
+  const battles = state.battles.map((b) => {
+    const done = isComplete(b, health);
+    if (done && !b.defeatedOn) {
+      changed = true;
+      return { ...b, defeatedOn: today };
+    }
+    if (!done && b.defeatedOn) {
+      changed = true;
+      const { defeatedOn: _, ...rest } = b;
+      return rest;
+    }
+    return b;
+  });
+  return changed ? { ...state, battles } : state;
+}
+
+export const defeated = (state: GameState) => state.battles.filter((b) => b.defeatedOn);

@@ -3,19 +3,22 @@ import { achievementStatus, type Achievement } from './achievements';
 import { currentStreak, levelFromXp, totalXp } from './game';
 import { useGame, useToday } from './store';
 import { AchievementsView } from './views/Achievements';
+import { ArenaView } from './views/Arena';
 import { Onboarding } from './views/Onboarding';
 import { SettingsView } from './views/Settings';
 import { StatsView } from './views/Stats';
 import { Hud, TodayView } from './views/Today';
-import { LevelUp, Toast } from './views/ui';
+import { LevelUp, Toast, Victory } from './views/ui';
+import type { Battle } from './battle';
 
-type Tab = 'heute' | 'werte' | 'erfolge' | 'einstellungen';
+type Tab = 'heute' | 'arena' | 'werte' | 'erfolge' | 'einstellungen';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'heute', label: 'Heute', icon: '⚔️' },
+  { id: 'heute', label: 'Heute', icon: '📋' },
+  { id: 'arena', label: 'Arena', icon: '⚔️' },
   { id: 'werte', label: 'Werte', icon: '📈' },
   { id: 'erfolge', label: 'Erfolge', icon: '🏅' },
-  { id: 'einstellungen', label: 'Einstellungen', icon: '⚙️' },
+  { id: 'einstellungen', label: 'Optionen', icon: '⚙️' },
 ];
 
 export default function App() {
@@ -45,6 +48,15 @@ export default function App() {
   }, [achievements, state.profile]);
   const dropToast = useCallback(() => setToasts((t) => t.slice(1)), []);
 
+  const [victory, setVictory] = useState<Battle | null>(null);
+  const wonIds = useRef(new Set(state.battles.filter((b) => b.defeatedOn).map((b) => b.id)));
+  useEffect(() => {
+    const won = state.battles.filter((b) => b.defeatedOn);
+    const fresh = won.find((b) => !wonIds.current.has(b.id));
+    wonIds.current = new Set(won.map((b) => b.id));
+    if (fresh) setVictory(fresh);
+  }, [state.battles]);
+
   if (!state.profile) return <Onboarding onStart={game.startGame} />;
 
   return (
@@ -60,6 +72,7 @@ export default function App() {
 
       <main className="content">
         {tab === 'heute' && <TodayView game={game} today={today} />}
+        {tab === 'arena' && <ArenaView game={game} today={today} />}
         {tab === 'werte' && <StatsView state={state} today={today} xp={xp} />}
         {tab === 'erfolge' && <AchievementsView list={achievements} />}
         {tab === 'einstellungen' && <SettingsView game={game} />}
@@ -82,7 +95,8 @@ export default function App() {
         ))}
       </nav>
 
-      {toasts.length > 0 && levelUp === null && <Toast key={toasts[0].id} icon={toasts[0].icon} title={toasts[0].title} onDone={dropToast} />}
+      {toasts.length > 0 && levelUp === null && victory === null && <Toast key={toasts[0].id} icon={toasts[0].icon} title={toasts[0].title} onDone={dropToast} />}
+      {victory !== null && levelUp === null && <Victory battle={victory} onClose={() => setVictory(null)} />}
       {levelUp !== null && <LevelUp level={levelUp} onClose={() => setLevelUp(null)} />}
     </div>
   );

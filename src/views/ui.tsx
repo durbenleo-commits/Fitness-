@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { rankFor } from '../game';
+import type { Battle } from '../battle';
+import { ATTR_LABEL, BOSS_ATTR_POINTS, ENEMY_ATTR_POINTS, rankFor } from '../game';
 
 export function Segmented<T extends string | number>(props: {
   options: { value: T; label: string }[];
@@ -49,6 +50,27 @@ export function Toast({ icon, title, onDone }: { icon: string; title: string; on
         <span className="toast-label">Erfolg freigeschaltet</span>
         <strong>{title}</strong>
       </span>
+    </div>
+  );
+}
+
+export function Victory({ battle: b, onClose }: { battle: Battle; onClose: () => void }) {
+  return (
+    <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="victory-title" onClick={onClose}>
+      <div className="lvlup" onClick={(e) => e.stopPropagation()}>
+        <span id="victory-title" className="display lvlup-title">
+          {b.boss ? 'Boss besiegt' : 'Sieg'}
+        </span>
+        <span className="victory-enemy" aria-hidden>
+          {b.icon}
+        </span>
+        <p>
+          <strong>{b.name}</strong> ist erledigt. Du bekommst {b.xp} XP und {b.boss ? BOSS_ATTR_POINTS : ENEMY_ATTR_POINTS} Punkte {ATTR_LABEL[b.attr]}.
+        </p>
+        <button className="primary" onClick={onClose} autoFocus>
+          Weiter
+        </button>
+      </div>
     </div>
   );
 }

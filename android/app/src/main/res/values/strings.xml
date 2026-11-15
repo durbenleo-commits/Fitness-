@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Questfit</string>
+    <string name="title_activity_main">Questfit</string>
+    <string name="package_name">app.questfit.fitness</string>
+    <string name="custom_url_scheme">app.questfit.fitness</string>
+</resources>
