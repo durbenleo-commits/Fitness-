@@ -1,6 +1,7 @@
 // Pure game logic: no React, no storage. Everything here is unit-tested.
 
 export type Attr = 'staerke' | 'ausdauer' | 'beweglichkeit' | 'disziplin';
+export type QuestAttr = Exclude<Attr, 'disziplin'>;
 export type Difficulty = 1 | 2 | 3;
 
 export const ATTR_LABEL: Record<Attr, string> = {
@@ -9,6 +10,8 @@ export const ATTR_LABEL: Record<Attr, string> = {
   beweglichkeit: 'Beweglichkeit',
   disziplin: 'Disziplin',
 };
+
+export const QUEST_ATTRS: QuestAttr[] = ['staerke', 'ausdauer', 'beweglichkeit'];
 
 export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
   1: 'Einsteiger',
@@ -20,11 +23,13 @@ export interface QuestTemplate {
   id: string;
   title: string;
   icon: string;
-  attr: Exclude<Attr, 'disziplin'>;
-  base: number; // amount at level 1, difficulty 2
+  attr: QuestAttr;
+  base: number; // built-in: amount at level 1, difficulty 2. Custom: the exact amount.
   step: number; // amounts are rounded to multiples of this
   unit: string;
   xp: number;
+  custom?: boolean; // made by the player; amount never scales
+  daily?: boolean; // custom only: appears every day as an extra quest
 }
 
 export const QUEST_POOL: QuestTemplate[] = [
@@ -44,12 +49,16 @@ export const QUEST_POOL: QuestTemplate[] = [
   { id: 'hips', title: 'Hüftöffner', icon: '🦋', attr: 'beweglichkeit', base: 5, step: 1, unit: 'Min.', xp: 20 },
 ];
 
+export const CUSTOM_QUEST_XP = 30;
+export const MAX_CUSTOM_QUESTS = 12;
+export const MAX_DAILY_QUESTS = 3;
+
 export interface QuestInstance {
   id: string; // unique within the day
   templateId: string;
   title: string;
   icon: string;
-  attr: Exclude<Attr, 'disziplin'>;
+  attr: QuestAttr;
   amount: number;
   unit: string;
   xp: number;
@@ -69,17 +78,33 @@ export interface Profile {
   startDate: string;
 }
 
+export interface SeasonRecord {
+  startDate: string;
+  endDate: string; // inclusive
+  length: number;
+}
+
 export interface GameState {
   version: 1;
   profile: Profile | null;
   days: Record<string, DayLog>;
+  customQuests: QuestTemplate[];
+  disabledQuests: string[];
+  seasons: SeasonRecord[]; // finished seasons, oldest first
 }
 
 export const QUESTS_PER_DAY = 4;
 export const REROLLS_PER_DAY = 1;
 export const DAY_CLEAR_BONUS = 50;
 
-export const emptyState = (): GameState => ({ version: 1, profile: null, days: {} });
+export const emptyState = (): GameState => ({
+  version: 1,
+  profile: null,
+  days: {},
+  customQuests: [],
+  disabledQuests: [],
+  seasons: [],
+});
 
 // ---------- dates ----------
 
@@ -103,6 +128,10 @@ export function addDays(key: string, n: number): string {
 
 export function daysBetween(a: string, b: string): number {
   return Math.round((fromDateKey(b).getTime() - fromDateKey(a).getTime()) / 86_400_000);
+}
+
+export function formatDate(key: string, opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }) {
+  return fromDateKey(key).toLocaleDateString('de-DE', opts);
 }
 
 // ---------- levels ----------
@@ -136,6 +165,45 @@ export function rankFor(level: number): string {
   return rank;
 }
 
+// ---------- quest pool ----------
+
+/** Templates that may be drawn at random: enabled built-ins plus non-daily custom quests. */
+export function randomPool(state: Pick<GameState, 'customQuests' | 'disabledQuests'>): QuestTemplate[] {
+  const pool = [
+    ...QUEST_POOL.filter((q) => !state.disabledQuests.includes(q.id)),
+    ...state.customQuests.filter((q) => !q.daily),
+  ];
+  return pool.length > 0 ? pool : QUEST_POOL;
+}
+
+export const dailyQuests = (state: Pick<GameState, 'customQuests'>) => state.customQuests.filter((q) => q.daily);
+
+export function findTemplate(state: Pick<GameState, 'customQuests'>, id: string): QuestTemplate | undefined {
+  return QUEST_POOL.find((q) => q.id === id) ?? state.customQuests.find((q) => q.id === id);
+}
+
+export function makeCustomQuest(input: {
+  title: string;
+  icon: string;
+  attr: QuestAttr;
+  amount: number;
+  unit: string;
+  daily: boolean;
+}): QuestTemplate {
+  return {
+    id: `custom-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`,
+    title: input.title.trim(),
+    icon: input.icon,
+    attr: input.attr,
+    base: input.amount,
+    step: 1,
+    unit: input.unit.trim(),
+    xp: CUSTOM_QUEST_XP,
+    custom: true,
+    daily: input.daily,
+  };
+}
+
 // ---------- quest generation ----------
 
 /** Deterministic PRNG so a day's quests are stable for a given seed. */
@@ -164,6 +232,7 @@ export function scaleFactor(level: number, difficulty: Difficulty): number {
 }
 
 export function scaledAmount(t: QuestTemplate, level: number, difficulty: Difficulty): number {
+  if (t.custom) return t.base;
   const raw = t.base * scaleFactor(level, difficulty);
   const rounded = Math.round(raw / t.step) * t.step;
   return Math.max(t.step, Number(rounded.toFixed(1)));
@@ -183,33 +252,50 @@ function instantiate(t: QuestTemplate, level: number, difficulty: Difficulty, sl
   };
 }
 
-/** One quest per attribute plus one random extra, all different. */
-export function generateDay(date: string, level: number, difficulty: Difficulty, seed = 0): DayLog {
-  const rand = mulberry32(hash(date) + seed);
+/**
+ * One quest per attribute (where the pool allows), filled up with random extras,
+ * all different. Daily custom quests are appended on top.
+ */
+export function generateDay(
+  date: string,
+  level: number,
+  difficulty: Difficulty,
+  pool: QuestTemplate[] = QUEST_POOL,
+  daily: QuestTemplate[] = [],
+): DayLog {
+  const rand = mulberry32(hash(date));
   const pick = (list: QuestTemplate[]) => list[Math.floor(rand() * list.length)];
   const chosen: QuestTemplate[] = [];
-  for (const attr of ['staerke', 'ausdauer', 'beweglichkeit'] as const) {
-    chosen.push(pick(QUEST_POOL.filter((q) => q.attr === attr)));
+  for (const attr of QUEST_ATTRS) {
+    const options = pool.filter((q) => q.attr === attr);
+    if (options.length > 0) chosen.push(pick(options));
   }
   while (chosen.length < QUESTS_PER_DAY) {
-    const q = pick(QUEST_POOL.filter((t) => !chosen.includes(t)));
-    chosen.push(q);
+    const options = pool.filter((t) => !chosen.includes(t));
+    if (options.length === 0) break;
+    chosen.push(pick(options));
   }
   return {
     date,
-    quests: chosen.map((t, i) => instantiate(t, level, difficulty, i)),
+    quests: [...chosen, ...daily].map((t, i) => instantiate(t, level, difficulty, i)),
     rerollsUsed: 0,
   };
 }
 
 /** Swap one quest for a different one of the same attribute (or any, if none left). */
-export function rerollQuest(day: DayLog, questId: string, level: number, difficulty: Difficulty): DayLog {
+export function rerollQuest(
+  day: DayLog,
+  questId: string,
+  level: number,
+  difficulty: Difficulty,
+  pool: QuestTemplate[] = QUEST_POOL,
+): DayLog {
   const idx = day.quests.findIndex((q) => q.id === questId);
   if (idx < 0 || day.quests[idx].done || day.rerollsUsed >= REROLLS_PER_DAY) return day;
   const used = new Set(day.quests.map((q) => q.templateId));
   const current = day.quests[idx];
-  let options = QUEST_POOL.filter((t) => t.attr === current.attr && !used.has(t.id));
-  if (options.length === 0) options = QUEST_POOL.filter((t) => !used.has(t.id));
+  let options = pool.filter((t) => t.attr === current.attr && !used.has(t.id));
+  if (options.length === 0) options = pool.filter((t) => !used.has(t.id));
   if (options.length === 0) return day;
   const rand = mulberry32(hash(day.date + questId) + day.rerollsUsed + 1);
   const t = options[Math.floor(rand() * options.length)];
@@ -218,18 +304,28 @@ export function rerollQuest(day: DayLog, questId: string, level: number, difficu
   return { ...day, quests, rerollsUsed: day.rerollsUsed + 1 };
 }
 
+/** Is this one of the daily custom quests (which cannot be swapped)? */
+export const isDailyInstance = (state: Pick<GameState, 'customQuests'>, q: QuestInstance) =>
+  !!state.customQuests.find((t) => t.id === q.templateId && t.daily);
+
 // ---------- derived stats ----------
 
 export const isCleared = (day: DayLog | undefined) =>
   !!day && day.quests.length > 0 && day.quests.every((q) => q.done);
 
-export function totalXp(state: GameState): number {
-  let xp = 0;
-  for (const day of Object.values(state.days)) {
-    for (const q of day.quests) if (q.done) xp += q.xp;
-    if (isCleared(day)) xp += DAY_CLEAR_BONUS;
-  }
-  return xp;
+type DayFilter = (date: string) => boolean;
+const everyDay: DayFilter = () => true;
+const inRange = (start: string, end: string): DayFilter => (d) => d >= start && d <= end;
+
+function daysWhere(state: GameState, filter: DayFilter): DayLog[] {
+  return Object.values(state.days).filter((d) => filter(d.date));
+}
+
+export const dayXp = (day: DayLog) =>
+  day.quests.reduce((s, q) => s + (q.done ? q.xp : 0), 0) + (isCleared(day) ? DAY_CLEAR_BONUS : 0);
+
+export function totalXp(state: GameState, filter: DayFilter = everyDay): number {
+  return daysWhere(state, filter).reduce((s, d) => s + dayXp(d), 0);
 }
 
 export function attributes(state: GameState): Record<Attr, number> {
@@ -252,8 +348,10 @@ export function currentStreak(state: GameState, today: string): number {
   return streak;
 }
 
-export function bestStreak(state: GameState): number {
-  const cleared = Object.keys(state.days).filter((k) => isCleared(state.days[k])).sort();
+export function bestStreak(state: GameState, filter: DayFilter = everyDay): number {
+  const cleared = Object.keys(state.days)
+    .filter((k) => filter(k) && isCleared(state.days[k]))
+    .sort();
   let best = 0;
   let run = 0;
   let prev: string | null = null;
@@ -265,14 +363,103 @@ export function bestStreak(state: GameState): number {
   return best;
 }
 
-export function questsDone(state: GameState): number {
-  let n = 0;
-  for (const day of Object.values(state.days)) n += day.quests.filter((q) => q.done).length;
-  return n;
+export function questsDone(state: GameState, filter: DayFilter = everyDay): number {
+  return daysWhere(state, filter).reduce((n, d) => n + d.quests.filter((q) => q.done).length, 0);
 }
+
+export interface ExerciseTotal {
+  templateId: string;
+  title: string;
+  icon: string;
+  unit: string;
+  attr: QuestAttr;
+  count: number;
+  total: number;
+}
+
+/** Per-exercise totals of completed quests, most frequent first. */
+export function exerciseTotals(state: GameState): ExerciseTotal[] {
+  const map = new Map<string, ExerciseTotal>();
+  for (const day of Object.values(state.days)) {
+    for (const q of day.quests) {
+      if (!q.done) continue;
+      const e = map.get(q.templateId) ?? {
+        templateId: q.templateId,
+        title: q.title,
+        icon: q.icon,
+        unit: q.unit,
+        attr: q.attr,
+        count: 0,
+        total: 0,
+      };
+      e.count += 1;
+      e.total = Number((e.total + q.amount).toFixed(1));
+      map.set(q.templateId, e);
+    }
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title));
+}
+
+export const totalFor = (state: GameState, templateId: string) =>
+  exerciseTotals(state).find((e) => e.templateId === templateId)?.total ?? 0;
+
+/** Daily values for a chart: XP per day, or the done amount of one exercise. */
+export function dailySeries(state: GameState, dates: string[], metric: 'xp' | string): number[] {
+  return dates.map((d) => {
+    const day = state.days[d];
+    if (!day) return 0;
+    if (metric === 'xp') return dayXp(day);
+    return day.quests.filter((q) => q.done && q.templateId === metric).reduce((s, q) => s + q.amount, 0);
+  });
+}
+
+// ---------- seasons ----------
 
 /** 1-based day of the season; may exceed seasonDays once the season is over. */
 export const seasonDay = (profile: Profile, today: string) => daysBetween(profile.startDate, today) + 1;
+
+export const seasonOver = (profile: Profile, today: string) => seasonDay(profile, today) > profile.seasonDays;
+
+export const seasonEnd = (startDate: string, length: number) => addDays(startDate, length - 1);
+
+export interface SeasonSummary {
+  startDate: string;
+  endDate: string;
+  length: number;
+  daysCleared: number;
+  daysActive: number;
+  questsDone: number;
+  xp: number;
+  bestStreak: number;
+}
+
+export function summarizeSeason(state: GameState, startDate: string, length: number): SeasonSummary {
+  const endDate = seasonEnd(startDate, length);
+  const f = inRange(startDate, endDate);
+  const days = daysWhere(state, f);
+  return {
+    startDate,
+    endDate,
+    length,
+    daysCleared: days.filter(isCleared).length,
+    daysActive: days.filter((d) => d.quests.some((q) => q.done)).length,
+    questsDone: questsDone(state, f),
+    xp: totalXp(state, f),
+    bestStreak: bestStreak(state, f),
+  };
+}
+
+/** Archive the current season and start a new one today. Level and XP carry over. */
+export function startNewSeason(state: GameState, today: string, length: number): GameState {
+  if (!state.profile) return state;
+  const { startDate, seasonDays } = state.profile;
+  const record: SeasonRecord = { startDate, endDate: seasonEnd(startDate, seasonDays), length: seasonDays };
+  return {
+    ...state,
+    seasons: [...state.seasons, record],
+    profile: { ...state.profile, startDate: today, seasonDays: length },
+  };
+}
 
 // ---------- persistence helpers ----------
 
@@ -280,4 +467,15 @@ export function isGameState(x: unknown): x is GameState {
   if (!x || typeof x !== 'object') return false;
   const s = x as GameState;
   return s.version === 1 && typeof s.days === 'object' && s.days !== null && 'profile' in s;
+}
+
+/** Fill in fields added after the first release so old saves keep working. */
+export function normalize(s: GameState): GameState {
+  return {
+    ...emptyState(),
+    ...s,
+    customQuests: Array.isArray(s.customQuests) ? s.customQuests : [],
+    disabledQuests: Array.isArray(s.disabledQuests) ? s.disabledQuests : [],
+    seasons: Array.isArray(s.seasons) ? s.seasons : [],
+  };
 }

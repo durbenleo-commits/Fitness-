@@ -8,11 +8,12 @@
 - Speicherung auf dem Gerät, installierbar als App, offline nutzbar
 - Backup speichern und laden
 
-## Phase 2: Spieltiefe
-- Eigene Quests anlegen
-- Erfolge und Abzeichen (z. B. „7 Tage am Stück“, „100 km gelaufen“)
-- Verlauf und Diagramme pro Übung
-- Ende der Saison mit Auswertung und Start einer neuen Saison
+## Phase 2: Spieltiefe ✅
+- Eigene Quests anlegen (zufällig gezogen oder jeden Tag als Extra-Quest)
+- Eingebaute Übungen aus dem Zufallspool ausschalten
+- 18 Erfolge mit Fortschrittsanzeige und Meldung beim Freischalten
+- Verlauf: Diagramm der letzten 14 Tage (XP oder eine Übung), Summen pro Übung
+- Ende der Saison mit Auswertung und Start einer neuen Saison, Liste vergangener Saisons
 
 ## Phase 3: Feinschliff
 - Wöchentliche Boss-Challenge mit Bonus-XP

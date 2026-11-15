@@ -4,7 +4,7 @@ Eine kostenlose Fitness-App im Videospiel-Stil: Jeden Tag gibt es vier Sport-Que
 
 Die App ist eine **PWA** (Progressive Web App). Sie läuft im Browser und lässt sich auf dem Handy wie eine normale App installieren, ohne Play Store und ohne Kosten.
 
-## Funktionen (Phase 1)
+## Funktionen
 
 - Charakter mit Name, Fitness-Stufe und Saison-Länge (30, 66 oder 90 Tage)
 - Täglich vier Quests: je eine für Stärke, Ausdauer und Beweglichkeit, dazu eine zufällige
@@ -15,6 +15,11 @@ Die App ist eine **PWA** (Progressive Web App). Sie läuft im Browser und lässt
 - Werte-Seite mit Attributen, Statistiken und Kalender der letzten 4 Wochen
 - Backup als Datei speichern und wieder laden
 - Funktioniert offline
+- Eigene Quests anlegen, z. B. Klimmzüge oder Radfahren, auf Wunsch jeden Tag
+- Übungen, die du nicht machen willst, ausschalten
+- 18 Erfolge, z. B. „Eine Woche“ (7 Tage in Folge) oder „50 Kilometer“
+- Verlauf der letzten 2 Wochen als Diagramm und Summen pro Übung
+- Am Ende der Saison eine Auswertung und der Start einer neuen Saison (Level und XP bleiben)
 
 ## Auf dem Handy installieren
 
