@@ -79,9 +79,13 @@ export function useGame(today: string) {
   }, [today, state.profile]);
 
   // Derived bookkeeping: health ticks off quests, finished fights get their victory date.
+  // Functional update: it must build on the latest state, never overwrite a pending one.
   useEffect(() => {
-    const next = settleBattles(autoCompleteFromHealth(state, today), today);
-    if (next !== state) setState(next);
+    setState((s) => {
+      const settled = settleBattles(autoCompleteFromHealth(s, today), today);
+      // a fresh enemy steps in once the current one falls
+      return settled.profile ? ensureBattles(settled, today, currentLevel(settled)) : settled;
+    });
   }, [state, today]);
 
   // Health Connect sync: on start, when the app returns to the foreground, and on demand.

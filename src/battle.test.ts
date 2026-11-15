@@ -124,3 +124,23 @@ describe('health auto-complete', () => {
     expect(autoCompleteFromHealth({ ...s, health: { ...s.health, connected: false } }, '2026-11-16').days).toBe(s.days);
   });
 });
+
+describe('enemy waves', () => {
+  it('sends up to three different enemies a day, each after the last falls', async () => {
+    const { enemiesOf, currentEnemy } = await import('./battle');
+    let s: GameState = ensureBattles({ ...emptyState(), profile }, '2026-11-15', 1);
+    expect(enemiesOf(s.battles, '2026-11-15')).toHaveLength(1);
+    for (let wave = 1; wave <= 3; wave++) {
+      const e = currentEnemy(s.battles, '2026-11-15')!;
+      let won = e;
+      for (const p of e.phases) won = logDamage(won, p.id, '2026-11-15', p.target);
+      s = settleBattles({ ...s, battles: s.battles.map((b) => (b.id === e.id ? won : b)) }, '2026-11-15');
+      s = ensureBattles(s, '2026-11-15', 1);
+    }
+    const list = enemiesOf(s.battles, '2026-11-15');
+    expect(list).toHaveLength(3);
+    expect(new Set(list.map((b) => b.enemyId)).size).toBe(3);
+    expect(list[1].xp).toBeLessThan(list[0].xp);
+    expect(list.every((b) => b.defeatedOn)).toBe(true);
+  });
+});

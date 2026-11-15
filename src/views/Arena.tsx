@@ -7,9 +7,14 @@ import {
   weekStart,
   type Battle,
   type BattlePhase,
+  ENEMIES_PER_DAY,
+  currentEnemy,
+  enemiesOf,
 } from '../battle';
 import { ATTR_LABEL, BOSS_ATTR_POINTS, ENEMY_ATTR_POINTS, QUEST_POOL, addDays, daysBetween, formatDate, type QuestAttr } from '../game';
-import { AttrTile } from './Icons';
+import { isScannable } from '../pose';
+import { AttrTile, Icon } from './Icons';
+import { Scanner } from './Scanner';
 import { Monster } from './Monster';
 
 const phaseAttr = (p: BattlePhase): QuestAttr =>
@@ -18,7 +23,8 @@ import type { Game } from '../store';
 
 export function ArenaView({ game, today }: { game: Game; today: string }) {
   const { state } = game;
-  const enemy = state.battles.find((b) => b.id === `enemy-${today}`);
+  const enemy = currentEnemy(state.battles, today);
+  const wave = enemy ? enemiesOf(state.battles, today).indexOf(enemy) + 1 : 0;
   const boss = state.battles.find((b) => b.id === `boss-${weekStart(today)}`);
   const nextMonday = addDays(weekStart(today), 7);
   const past = state.battles.filter((b) => b.id !== enemy?.id && b.id !== boss?.id).reverse();
@@ -31,7 +37,15 @@ export function ArenaView({ game, today }: { game: Game; today: string }) {
         <span className="count">{wins.length === 1 ? "1 Sieg" : `${wins.length} Siege`}</span>
       </div>
 
-      {enemy && <BattleCard battle={enemy} game={game} today={today} />}
+      {enemy && (
+        <>
+          <p className="wave-note">
+            Gegner {wave} von {ENEMIES_PER_DAY} heute
+            {enemy.defeatedOn && wave === ENEMIES_PER_DAY ? '. Alle geschafft, morgen geht es weiter.' : ''}
+          </p>
+          <BattleCard battle={enemy} game={game} today={today} />
+        </>
+      )}
 
       <h2>Wochen-Boss</h2>
       {boss ? (
@@ -77,6 +91,7 @@ function BattleCard({ battle: b, game, today }: { battle: Battle; game: Game; to
   const hp = hpLeft(b, health);
   const [shake, setShake] = useState(0);
   const [hitText, setHitText] = useState<string | null>(null);
+  const [scanPhase, setScanPhase] = useState<BattlePhase | null>(null);
 
   const attack = (phase: BattlePhase, amount: number) => {
     game.hit(b.id, phase.id, amount);
@@ -132,6 +147,21 @@ function BattleCard({ battle: b, game, today }: { battle: Battle; game: Game; to
       )}
       {status === 'escaped' && <p className="escaped-note">Entkommen. Morgen wartet ein neuer Gegner.</p>}
 
+      {scanPhase && (
+        <Scanner
+          exerciseId={scanPhase.exerciseId!}
+          title={`${scanPhase.title} gegen ${b.name}`}
+          target={Math.max(1, Math.ceil(scanPhase.target - phaseProgress(b, scanPhase, health)))}
+          unit={scanPhase.unit}
+          allowManual={false}
+          onDone={(n) => {
+            if (n > 0) attack(scanPhase, n);
+            setScanPhase(null);
+          }}
+          onClose={() => setScanPhase(null)}
+        />
+      )}
+
       <ul className="phases">
         {b.phases.map((p) => (
           <PhaseRow
@@ -142,6 +172,8 @@ function BattleCard({ battle: b, game, today }: { battle: Battle; game: Game; to
             canAct={status === 'active'}
             hasToday={p.log.some((l) => l.date === today)}
             onAttack={(n) => attack(p, n)}
+            onCamera={() => setScanPhase(p)}
+            cameraOnly={!!game.state.profile?.cameraRequired}
             onUndo={() => game.undoHit(b.id, p.id)}
           />
         ))}
@@ -163,10 +195,14 @@ function PhaseRow(props: {
   fromHealth: boolean;
   canAct: boolean;
   hasToday: boolean;
+  cameraOnly: boolean;
   onAttack: (n: number) => void;
+  onCamera: () => void;
   onUndo: () => void;
 }) {
-  const { phase: p, progress, fromHealth, canAct, hasToday, onAttack, onUndo } = props;
+  const { phase: p, progress, fromHealth, canAct, hasToday, cameraOnly, onAttack, onCamera, onUndo } = props;
+  const scannable = p.kind === 'exercise' && isScannable(p.exerciseId);
+  const manual = !(scannable && cameraOnly);
   const done = progress >= p.target;
   const rest = Number(Math.max(p.target - progress, 0).toFixed(1));
   const fmt = (n: number) => n.toLocaleString('de-DE');
@@ -188,16 +224,26 @@ function PhaseRow(props: {
 
       {canAct && !done && !fromHealth && (
         <div className="attacks">
-          {quickAmounts(p.unit)
-            .filter((n) => n < rest)
-            .map((n) => (
-              <button key={n} className="attack" onClick={() => onAttack(n)}>
-                +{fmt(n)}
-              </button>
-            ))}
-          <button className="attack finish" onClick={() => onAttack(rest)}>
-            Rest: {fmt(rest)}
-          </button>
+          {scannable && (
+            <button className="attack camera" onClick={onCamera}>
+              <Icon name="camera" size={18} />
+              Kamera
+            </button>
+          )}
+          {manual &&
+            quickAmounts(p.unit)
+              .filter((n) => n < rest)
+              .slice(0, scannable ? 2 : 3)
+              .map((n) => (
+                <button key={n} className="attack" onClick={() => onAttack(n)}>
+                  +{fmt(n)}
+                </button>
+              ))}
+          {manual && (
+            <button className="attack finish" onClick={() => onAttack(rest)}>
+              Rest: {fmt(rest)}
+            </button>
+          )}
         </div>
       )}
       {canAct && hasToday && !fromHealth && (

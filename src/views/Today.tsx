@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { hpLeft } from '../battle';
+import { currentEnemy, hpLeft } from '../battle';
 import {
   ATTR_LABEL,
   DAY_CLEAR_BONUS,
@@ -17,7 +17,9 @@ import {
   type QuestInstance,
 } from '../game';
 import type { Game } from '../store';
+import { isScannable } from '../pose';
 import { AttrTile, Badge3D, Icon } from './Icons';
+import { Scanner } from './Scanner';
 import { Monster } from './Monster';
 import { SEASON_OPTIONS } from './Onboarding';
 import { Segmented } from './ui';
@@ -64,12 +66,13 @@ export function Hud(props: { profile: Profile; level: number; intoLevel: number;
 export function TodayView({ game, today, onOpenArena }: { game: Game; today: string; onOpenArena: () => void }) {
   const { state } = game;
   const [swapping, setSwapping] = useState(false);
+  const [scanQuest, setScanQuest] = useState<QuestInstance | null>(null);
   const day = state.days[today];
   if (!day || !state.profile) return null;
   const done = day.quests.filter((q) => q.done).length;
   const cleared = isCleared(day);
   const canReroll = day.rerollsUsed < REROLLS_PER_DAY;
-  const enemy = state.battles.find((b) => b.id === `enemy-${today}`);
+  const enemy = currentEnemy(state.battles, today);
 
   return (
     <section>
@@ -101,12 +104,14 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
               swapMode={swapping}
               swappable={swappable}
               tracked={state.health.connected && isTrackedQuest(q.templateId) ? healthValue(state, today, q.templateId) : null}
+              camera={!q.done && isScannable(q.templateId)}
               onTap={() => {
                 if (swapping) {
                   if (!swappable) return;
                   game.reroll(q.id);
                   setSwapping(false);
-                } else game.toggleQuest(q.id);
+                } else if (!q.done && isScannable(q.templateId)) setScanQuest(q);
+                else game.toggleQuest(q.id);
               }}
             />
           );
@@ -128,7 +133,7 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
           </p>
         ) : (
           <>
-            <p className="hint">Tippe auf eine Quest, wenn du sie erledigt hast.</p>
+            <p className="hint">Tippe auf eine Quest, wenn du sie erledigt hast. Beim Kamera-Symbol zählt die Kamera mit.</p>
             {canReroll && done < day.quests.length && (
               <button className="joker" onClick={() => setSwapping(true)}>
                 <Icon name="swap" size={18} />
@@ -138,6 +143,25 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
           </>
         )}
       </div>
+
+      {scanQuest && (
+        <Scanner
+          exerciseId={scanQuest.templateId}
+          title={scanQuest.title}
+          target={scanQuest.amount}
+          unit={scanQuest.unit}
+          allowManual={!state.profile.cameraRequired}
+          onDone={(amount) => {
+            if (amount >= scanQuest.amount) game.toggleQuest(scanQuest.id);
+            setScanQuest(null);
+          }}
+          onManual={() => {
+            game.toggleQuest(scanQuest.id);
+            setScanQuest(null);
+          }}
+          onClose={() => setScanQuest(null)}
+        />
+      )}
 
       {enemy && (
         <button className={`arena-teaser attr-${enemy.attr} ${enemy.defeatedOn ? 'won' : ''}`} onClick={onOpenArena}>
@@ -166,12 +190,19 @@ function healthValue(state: GameState, today: string, templateId: string): numbe
   return templateId === 'steps' ? h.steps : h.runKm;
 }
 
-function QuestRow(props: { quest: QuestInstance; swapMode: boolean; swappable: boolean; tracked: number | null; onTap: () => void }) {
-  const { quest: q, swapMode, swappable, tracked, onTap } = props;
+function QuestRow(props: {
+  quest: QuestInstance;
+  swapMode: boolean;
+  swappable: boolean;
+  camera: boolean;
+  tracked: number | null;
+  onTap: () => void;
+}) {
+  const { quest: q, swapMode, swappable, camera, tracked, onTap } = props;
   const [burst, setBurst] = useState(0);
 
   const tap = () => {
-    if (!swapMode && !q.done) {
+    if (!swapMode && !q.done && !camera) {
       setBurst((b) => b + 1);
       navigator.vibrate?.(30);
     }
@@ -199,6 +230,8 @@ function QuestRow(props: { quest: QuestInstance; swapMode: boolean; swappable: b
             <Icon name="swap" size={20} />
           ) : q.done ? (
             <Badge3D icon="check" tone={q.attr} shape="coin" size={42} />
+          ) : camera ? (
+            <Icon name="camera" size={20} />
           ) : null}
         </span>
         {burst > 0 && q.done && (

@@ -20,6 +20,7 @@ Die App ist eine **PWA** (Progressive Web App). Sie läuft im Browser und lässt
 - 18 Erfolge, z. B. „Eine Woche“ (7 Tage in Folge) oder „50 Kilometer“
 - Verlauf der letzten 2 Wochen als Diagramm und Summen pro Übung
 - Arena: jeden Tag ein Gegner, jede Woche ein Boss mit drei Phasen. Besiegt wird er mit Sport
+- Kamera-Zähler: Liegestütze, Kniebeugen, Ausfallschritte, Hampelmänner, Klimmzüge, Unterarmstütz und Wandsitzen zählt die Kamera mit (Pose-Erkennung läuft komplett auf dem Handy)
 - Android-App: Schritte und Läufe aus Samsung Health (über Health Connect) zählen automatisch
 - Am Ende der Saison eine Auswertung und der Start einer neuen Saison (Level und XP bleiben)
 

@@ -54,7 +54,7 @@ export const EQUIPMENT: { id: Equipment; label: string; icon: IconName }[] = [
   { id: 'outdoor', label: 'Draußen laufen und gehen', icon: 'tree' },
   { id: 'stairs', label: 'Treppen', icon: 'stairs' },
   { id: 'dumbbells', label: 'Kurzhanteln', icon: 'staerke' },
-  { id: 'kettlebell', label: 'Kettlebell', icon: 'kettlebell' },
+  { id: 'kettlebell', label: 'Kugelhantel', icon: 'kettlebell' },
   { id: 'bar', label: 'Klimmzugstange', icon: 'bar' },
   { id: 'band', label: 'Widerstandsband', icon: 'band' },
   { id: 'rope', label: 'Springseil', icon: 'rope' },
@@ -86,25 +86,25 @@ export const QUEST_POOL: QuestTemplate[] = [
   { id: 'pushups', title: 'Liegestütze', icon: '💪', attr: 'staerke', base: 12, step: 1, unit: 'Wdh.', xp: 30 },
   { id: 'squats', title: 'Kniebeugen', icon: '🦵', attr: 'staerke', base: 20, step: 1, unit: 'Wdh.', xp: 30 },
   { id: 'lunges', title: 'Ausfallschritte', icon: '🚶', attr: 'staerke', base: 10, step: 1, unit: 'pro Bein', xp: 30 },
-  { id: 'situps', title: 'Crunches', icon: '🔥', attr: 'staerke', base: 20, step: 1, unit: 'Wdh.', xp: 25 },
+  { id: 'situps', title: 'Bauchpressen', icon: '🔥', attr: 'staerke', base: 20, step: 1, unit: 'Wdh.', xp: 25 },
   { id: 'wallsit', title: 'Wandsitzen', icon: '🧱', attr: 'staerke', base: 40, step: 5, unit: 'Sek.', xp: 25 },
   { id: 'plank', title: 'Unterarmstütz', icon: '🪵', attr: 'ausdauer', base: 40, step: 5, unit: 'Sek.', xp: 30 },
   { id: 'run', title: 'Laufen', icon: '🏃', attr: 'ausdauer', base: 2, step: 0.5, unit: 'km', xp: 45, requires: ['outdoor', 'treadmill'] },
   { id: 'walk', title: 'Spaziergang', icon: '👟', attr: 'ausdauer', base: 20, step: 5, unit: 'Min.', xp: 25, requires: ['outdoor', 'treadmill'] },
   { id: 'jacks', title: 'Hampelmänner', icon: '⭐', attr: 'ausdauer', base: 40, step: 5, unit: 'Wdh.', xp: 25, jump: true },
-  { id: 'burpees', title: 'Burpees', icon: '⚡', attr: 'ausdauer', base: 8, step: 1, unit: 'Wdh.', xp: 40, jump: true },
+  { id: 'burpees', title: 'Hockstrecksprünge', icon: '⚡', attr: 'ausdauer', base: 8, step: 1, unit: 'Wdh.', xp: 40, jump: true },
   { id: 'mountain', title: 'Bergsteiger', icon: '⛰️', attr: 'ausdauer', base: 30, step: 5, unit: 'Wdh.', xp: 30 },
   { id: 'steps', title: 'Schritte', icon: '👣', attr: 'ausdauer', base: 6000, step: 500, unit: 'Schritte', xp: 30, noLevelScale: true },
   { id: 'stairs', title: 'Treppen steigen', icon: '🪜', attr: 'ausdauer', base: 6, step: 1, unit: 'Stockwerke', xp: 30, requires: ['stairs'] },
   { id: 'stretch', title: 'Dehnen', icon: '🧘', attr: 'beweglichkeit', base: 8, step: 1, unit: 'Min.', xp: 25 },
-  { id: 'mobility', title: 'Mobility-Routine', icon: '🌀', attr: 'beweglichkeit', base: 10, step: 1, unit: 'Min.', xp: 30 },
+  { id: 'mobility', title: 'Mobilisation', icon: '🌀', attr: 'beweglichkeit', base: 10, step: 1, unit: 'Min.', xp: 30 },
   { id: 'hips', title: 'Hüftöffner', icon: '🦋', attr: 'beweglichkeit', base: 5, step: 1, unit: 'Min.', xp: 20 },
   // With equipment
   { id: 'pullups', title: 'Klimmzüge', icon: '🧗', attr: 'staerke', base: 4, step: 1, unit: 'Wdh.', xp: 40, requires: ['bar'] },
-  { id: 'curls', title: 'Bizeps-Curls', icon: '🏋️', attr: 'staerke', base: 12, step: 1, unit: 'pro Arm', xp: 30, requires: ['dumbbells'] },
+  { id: 'curls', title: 'Bizepsbeugen', icon: '🏋️', attr: 'staerke', base: 12, step: 1, unit: 'pro Arm', xp: 30, requires: ['dumbbells'] },
   { id: 'press', title: 'Schulterdrücken', icon: '🙌', attr: 'staerke', base: 12, step: 1, unit: 'Wdh.', xp: 30, requires: ['dumbbells', 'kettlebell'] },
   { id: 'rows', title: 'Rudern mit Band', icon: '🎗️', attr: 'staerke', base: 15, step: 1, unit: 'Wdh.', xp: 25, requires: ['band'] },
-  { id: 'swings', title: 'Kettlebell-Swings', icon: '🔔', attr: 'ausdauer', base: 20, step: 1, unit: 'Wdh.', xp: 35, requires: ['kettlebell'] },
+  { id: 'swings', title: 'Kugelhantel-Schwünge', icon: '🔔', attr: 'ausdauer', base: 20, step: 1, unit: 'Wdh.', xp: 35, requires: ['kettlebell'] },
   { id: 'rope', title: 'Seilspringen', icon: '🪢', attr: 'ausdauer', base: 3, step: 1, unit: 'Min.', xp: 30, requires: ['rope'], jump: true },
   { id: 'bike', title: 'Radfahren', icon: '🚴', attr: 'ausdauer', base: 20, step: 5, unit: 'Min.', xp: 35, requires: ['bike'] },
   { id: 'swim', title: 'Schwimmen', icon: '🏊', attr: 'ausdauer', base: 20, step: 5, unit: 'Min.', xp: 45, requires: ['pool'] },
@@ -141,6 +141,7 @@ export interface Profile {
   startDate: string;
   equipment?: Equipment[]; // missing in old saves: DEFAULT_EQUIPMENT
   noJumping?: boolean;
+  cameraRequired?: boolean; // exercises the camera can count must be done in front of it
 }
 
 export interface SeasonRecord {
@@ -573,6 +574,16 @@ export function isGameState(x: unknown): x is GameState {
   return s.version === 1 && typeof s.days === 'object' && s.days !== null && 'profile' in s;
 }
 
+const builtInTitle = (id: string | undefined) => QUEST_POOL.find((q) => q.id === id)?.title;
+
+/** Exercise names can change between versions; saved days and fights follow the current names. */
+function retitleDay(d: DayLog): DayLog {
+  return { ...d, quests: d.quests.map((q) => ({ ...q, title: builtInTitle(q.templateId) ?? q.title })) };
+}
+function retitleBattle(b: Battle): Battle {
+  return { ...b, phases: b.phases.map((p) => ({ ...p, title: (p.kind === 'exercise' && builtInTitle(p.exerciseId)) || p.title })) };
+}
+
 /** Fill in fields added after the first release so old saves keep working. */
 export function normalize(s: GameState): GameState {
   return {
@@ -581,7 +592,8 @@ export function normalize(s: GameState): GameState {
     customQuests: Array.isArray(s.customQuests) ? s.customQuests : [],
     disabledQuests: Array.isArray(s.disabledQuests) ? s.disabledQuests : [],
     seasons: Array.isArray(s.seasons) ? s.seasons : [],
-    battles: Array.isArray(s.battles) ? s.battles : [],
+    battles: Array.isArray(s.battles) ? s.battles.map(retitleBattle) : [],
+    days: Object.fromEntries(Object.entries(s.days).map(([k, d]) => [k, retitleDay(d)])),
     health: s.health && typeof s.health === 'object' ? { connected: !!s.health.connected, lastSync: s.health.lastSync, days: s.health.days ?? {} } : { connected: false, days: {} },
   };
 }

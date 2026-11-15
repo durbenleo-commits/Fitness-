@@ -154,13 +154,39 @@ function makePhase(move: MoveSpec, level: number, difficulty: Difficulty, factor
 }
 
 /** Today's everyday enemy. Roughly one in five is an elite with more HP and more XP. */
-export function generateEnemy(date: string, level: number, difficulty: Difficulty, pool: QuestTemplate[] = QUEST_POOL): Battle {
-  const rand = mulberry32(hash('enemy' + date));
-  const e = ENEMIES[Math.floor(rand() * ENEMIES.length)];
+export const ENEMIES_PER_DAY = 3;
+/** Later enemies of the same day give a bit less XP. */
+const WAVE_XP = [1, 0.8, 0.6];
+
+export const enemyId = (date: string, wave: number) => (wave === 1 ? `enemy-${date}` : `enemy-${date}-${wave}`);
+
+/** The day's enemies in order (up to three waves; the next appears once the previous falls). */
+export const enemiesOf = (battles: Battle[], date: string) =>
+  [1, 2, 3].map((w) => battles.find((b) => b.id === enemyId(date, w))).filter((b): b is Battle => !!b);
+
+/** The enemy to show today: the first one still standing, else the last one beaten. */
+export function currentEnemy(battles: Battle[], date: string): Battle | undefined {
+  const list = enemiesOf(battles, date);
+  return list.find((b) => !b.defeatedOn) ?? list[list.length - 1];
+}
+
+export function generateEnemy(
+  date: string,
+  level: number,
+  difficulty: Difficulty,
+  pool: QuestTemplate[] = QUEST_POOL,
+  wave = 1,
+  avoid: string[] = [],
+): Battle {
+  const rand = mulberry32(hash('enemy' + date + (wave > 1 ? `#${wave}` : '')));
+  let idx = Math.floor(rand() * ENEMIES.length);
+  // a new wave never repeats a monster already met today
+  while (avoid.includes(ENEMIES[idx].id)) idx = (idx + 1) % ENEMIES.length;
+  const e = ENEMIES[idx];
   const elite = rand() < 0.2;
   const factor = elite ? 1.5 : 1;
   return {
-    id: `enemy-${date}`,
+    id: enemyId(date, wave),
     enemyId: e.id,
     name: e.name,
     icon: e.icon,
@@ -170,7 +196,7 @@ export function generateEnemy(date: string, level: number, difficulty: Difficult
     elite,
     start: date,
     end: date,
-    xp: Math.round((40 + 4 * level) * (elite ? 1.6 : 1)),
+    xp: Math.round((40 + 4 * level) * (elite ? 1.6 : 1) * WAVE_XP[wave - 1]),
     phases: e.moves.map((m, i) => makePhase(adaptMove(m, e.attr, pool, rand), level, difficulty, factor, i)),
   };
 }
@@ -293,8 +319,16 @@ export function ensureBattles(state: GameState, today: string, level: number): G
   const add: Battle[] = [];
   const has = (id: string) => state.battles.some((b) => b.id === id);
   const pool = battlePool(state);
-  const enemy = generateEnemy(today, level, state.profile.difficulty, pool);
-  if (!has(enemy.id)) add.push(enemy);
+  const todays = enemiesOf(state.battles, today);
+  if (todays.length === 0) {
+    add.push(generateEnemy(today, level, state.profile.difficulty, pool));
+  } else {
+    const last = todays[todays.length - 1];
+    const wave = todays.length + 1;
+    if (last.defeatedOn && wave <= ENEMIES_PER_DAY && !has(enemyId(today, wave))) {
+      add.push(generateEnemy(today, level, state.profile.difficulty, pool, wave, todays.map((b) => b.enemyId)));
+    }
+  }
   if (bossAvailable(today) && !has(`boss-${weekStart(today)}`)) add.push(generateBoss(today, level, state.profile.difficulty, pool));
   return add.length ? { ...state, battles: [...state.battles, ...add] } : state;
 }

@@ -99,7 +99,7 @@ export function EquipmentPicker(props: {
         <input type="checkbox" checked={quiet} onChange={(e) => props.onChange(list, e.target.checked)} />
         <span>
           Keine Sprungübungen
-          <small>Zum Beispiel wegen Nachbarn unter dir oder wegen der Knie. Lässt Burpees, Hampelmänner und Seilspringen weg.</small>
+          <small>Zum Beispiel wegen Nachbarn unter dir oder wegen der Knie. Lässt Hockstrecksprünge, Hampelmänner und Seilspringen weg.</small>
         </span>
       </label>
     </>

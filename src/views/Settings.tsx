@@ -14,6 +14,7 @@ import {
   type QuestAttr,
 } from '../game';
 import type { Game } from '../store';
+import { SCANNABLE } from '../pose';
 import { AttrTile } from './Icons';
 import { EquipmentPicker, Segmented } from './ui';
 
@@ -66,6 +67,8 @@ export function SettingsView({ game }: { game: Game }) {
       </fieldset>
 
       <GearSection game={game} />
+
+      <CameraSection game={game} />
 
       <HealthSection game={game} />
 
@@ -359,5 +362,29 @@ function GearSection({ game }: { game: Game }) {
         </button>
       )}
     </fieldset>
+  );
+}
+
+function CameraSection({ game }: { game: Game }) {
+  const profile = game.state.profile!;
+  const names = Object.keys(SCANNABLE)
+    .map((id) => QUEST_POOL.find((q) => q.id === id)?.title)
+    .filter(Boolean)
+    .join(', ');
+  return (
+    <div className="field">
+      <span>Kamera-Zähler</span>
+      <p className="small-text">
+        Bei {names} zählt die Kamera mit. Tippe die Quest an, stell das Handy so auf, dass du ganz zu sehen bist, und leg los. Die Bilder
+        bleiben auf dem Handy und werden nirgends gespeichert.
+      </p>
+      <label className="check">
+        <input type="checkbox" checked={!!profile.cameraRequired} onChange={(e) => game.updateProfile({ cameraRequired: e.target.checked })} />
+        <span>
+          Kamera-Pflicht
+          <small>Diese Übungen lassen sich dann nur noch vor der Kamera abhaken, auch gegen Gegner. Probier die Erkennung vorher einmal aus.</small>
+        </span>
+      </label>
+    </div>
   );
 }
