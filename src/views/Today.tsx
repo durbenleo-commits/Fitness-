@@ -5,7 +5,9 @@ import {
   DAY_CLEAR_BONUS,
   REROLLS_PER_DAY,
   formatDate,
+  bestStreak,
   isCleared,
+  questsDone,
   isDailyInstance,
   isTrackedQuest,
   rankFor,
@@ -67,22 +69,61 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
   const { state } = game;
   const [swapping, setSwapping] = useState(false);
   const [scanQuest, setScanQuest] = useState<QuestInstance | null>(null);
+  const [filter, setFilterState] = useState<'open' | 'done'>('open');
+  // Quests ticked off while looking at "Offen" stay in view until the tab changes,
+  // so the check animation is visible instead of the card vanishing.
+  const [justDone, setJustDone] = useState<string[]>([]);
+  const setFilter = (f: 'open' | 'done') => {
+    setFilterState(f);
+    setJustDone([]);
+  };
+  const markDone = (id: string) => setJustDone((l) => [...l, id]);
   const day = state.days[today];
   if (!day || !state.profile) return null;
   const done = day.quests.filter((q) => q.done).length;
   const cleared = isCleared(day);
   const canReroll = day.rerollsUsed < REROLLS_PER_DAY;
   const enemy = currentEnemy(state.battles, today);
+  const dayNo = Math.min(seasonDay(state.profile, today), state.profile.seasonDays);
+  const open = day.quests.length - done;
+  const wins = state.battles.filter((b) => b.defeatedOn).length;
+  const shown = day.quests.filter((q) => (filter === 'open' ? !q.done || justDone.includes(q.id) : q.done));
+  const mood =
+    done === 0 ? 'Neuer Tag, neue Quests. Fang mit der leichtesten an.' : open > 0 ? `Läuft. Noch ${open} ${open === 1 ? 'Quest' : 'Quests'} bis zum Bonus.` : 'Alles erledigt. Morgen geht es weiter.';
 
   return (
     <section>
       {seasonOver(state.profile, today) && <SeasonEnd state={state} onNewSeason={game.newSeason} />}
 
-      <div className="section-head">
-        <h1>Heutige Quests</h1>
-        <span className="count">
-          {done} von {day.quests.length}
-        </span>
+      <div className="day-hero">
+        <div className="stat-chips">
+          <span className="stat-chip">
+            <Icon name="arena" size={16} />
+            {wins} {wins === 1 ? 'Sieg' : 'Siege'}
+          </span>
+          <span className="stat-chip">
+            <Icon name="check" size={16} />
+            {questsDone(state)} erledigt
+          </span>
+          <span className="stat-chip">
+            <Icon name="trophy" size={16} />
+            Bestserie {bestStreak(state)}
+          </span>
+        </div>
+        <h1 className="day-title">
+          <span className="display">Tag {dayNo}</span>
+          <span className="day-of">/ {state.profile.seasonDays}</span>
+        </h1>
+        <p className="day-mood">{mood}</p>
+      </div>
+
+      <div className="filter-tabs" role="tablist" aria-label="Quests filtern">
+        <button role="tab" aria-selected={filter === 'open'} onClick={() => setFilter('open')}>
+          Offen <span>{open}</span>
+        </button>
+        <button role="tab" aria-selected={filter === 'done'} onClick={() => setFilter('done')}>
+          Erledigt <span>{done}</span>
+        </button>
       </div>
 
       <div className={`day-track ${cleared ? 'full' : ''}`} aria-hidden>
@@ -95,7 +136,10 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
       </div>
 
       <ul className={`quests ${swapping ? 'swapping' : ''}`}>
-        {day.quests.map((q) => {
+        {shown.length === 0 && (
+          <li className="empty-list">{filter === 'open' ? 'Keine offenen Quests mehr.' : 'Noch nichts erledigt. Los geht’s!'}</li>
+        )}
+        {shown.map((q) => {
           const swappable = !q.done && !isDailyInstance(state, q);
           return (
             <QuestRow
@@ -111,7 +155,10 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
                   game.reroll(q.id);
                   setSwapping(false);
                 } else if (!q.done && isScannable(q.templateId)) setScanQuest(q);
-                else game.toggleQuest(q.id);
+                else {
+                  if (!q.done) markDone(q.id);
+                  game.toggleQuest(q.id);
+                }
               }}
             />
           );
@@ -152,10 +199,14 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
           unit={scanQuest.unit}
           allowManual={!state.profile.cameraRequired}
           onDone={(amount) => {
-            if (amount >= scanQuest.amount) game.toggleQuest(scanQuest.id);
+            if (amount >= scanQuest.amount) {
+              markDone(scanQuest.id);
+              game.toggleQuest(scanQuest.id);
+            }
             setScanQuest(null);
           }}
           onManual={() => {
+            markDone(scanQuest.id);
             game.toggleQuest(scanQuest.id);
             setScanQuest(null);
           }}

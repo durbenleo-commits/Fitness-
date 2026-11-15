@@ -70,7 +70,10 @@ export function useGame(today: string) {
     setState((s) => {
       if (!s.profile) return s;
       let next = s;
-      if (!s.days[today]) {
+      const existing = s.days[today];
+      // Days made before the step goal became fixed get it, as long as nothing is ticked yet.
+      const outdated = existing && !existing.quests.some((q) => q.templateId === 'steps') && !existing.quests.some((q) => q.done);
+      if (!existing || outdated) {
         const day = generateDay(today, currentLevel(s), s.profile.difficulty, randomPool(s), dailyQuests(s));
         next = { ...s, days: { ...s.days, [today]: day } };
       }

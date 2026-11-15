@@ -8,7 +8,9 @@ const ids = (p: Profile) => randomPool({ customQuests: [], disabledQuests: [], p
 describe('equipment', () => {
   it('keeps old saves on bodyweight plus outdoor and stairs', () => {
     const pool = ids(base);
-    expect(pool).toEqual(expect.arrayContaining(['run', 'walk', 'stairs', 'pushups']));
+    expect(pool).toEqual(expect.arrayContaining(['run', 'stairs', 'pushups']));
+    expect(pool).not.toContain('walk'); // replaced by the daily step goal
+    expect(pool).not.toContain('steps'); // fixed, never random
     expect(pool).not.toContain('pullups');
     expect(pool).not.toContain('swim');
   });

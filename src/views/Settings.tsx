@@ -248,8 +248,8 @@ function BuiltInQuests({ game }: { game: Game }) {
       <legend>Übungen im Zufallspool</legend>
       <p className="small-text">Schalte Übungen aus, die du nicht machen kannst oder willst. Gilt ab morgen.</p>
       <ul className="quest-list">
-        {QUEST_POOL.map((q) => {
-          const reason = unavailableReason(q, state.profile);
+        {QUEST_POOL.filter((q) => !q.retired).map((q) => {
+          const reason = q.fixed ? 'Jeden Tag fest dabei' : unavailableReason(q, state.profile);
           const enabled = !reason && !state.disabledQuests.includes(q.id);
           return (
             <li key={q.id} className={`attr-${q.attr} ${enabled ? '' : 'off'}`}>
@@ -264,7 +264,7 @@ function BuiltInQuests({ game }: { game: Game }) {
                 role="switch"
                 className="switch"
                 disabled={!!reason}
-                checked={enabled}
+                checked={enabled || !!q.fixed}
                 onChange={(e) => game.setQuestEnabled(q.id, e.target.checked)}
               />
             </li>

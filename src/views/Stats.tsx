@@ -4,6 +4,10 @@ import {
   addDays,
   attributes,
   bestStreak,
+  daysBetween,
+  levelFromXp,
+  playerClass,
+  until,
   dailySeries,
   exerciseTotals,
   formatDate,
@@ -13,30 +17,86 @@ import {
   type Attr,
   type GameState,
 } from '../game';
+import { Badge3D } from './Icons';
+import { Segmented } from './ui';
 
 const ATTR_ORDER: Attr[] = ['staerke', 'ausdauer', 'beweglichkeit', 'disziplin'];
 const CHART_DAYS = 14;
 
 export function StatsView({ state, today, xp }: { state: GameState; today: string; xp: number }) {
   const attrs = attributes(state);
-  const maxAttr = Math.max(10, ...Object.values(attrs));
   const last28 = useMemo(() => Array.from({ length: 28 }, (_, i) => addDays(today, i - 27)), [today]);
   const exercises = exerciseTotals(state);
+  const [compare, setCompare] = useState<'week' | 'start'>('week');
+  const start = state.profile?.startDate ?? today;
+  const baseline = attributes(state, until(compare === 'week' ? addDays(today, -7) : start));
+  const cls = playerClass(attrs);
+  const lvl = levelFromXp(xp);
+  const segments = 20;
+  const filled = Math.round((lvl.intoLevel / lvl.needed) * segments);
 
   return (
     <section className="stats">
-      <h1>Deine Werte</h1>
+      <div className="class-card">
+        <span className="class-label">Deine Klasse · Tag {Math.max(1, daysBetween(start, today) + 1)}</span>
+        <span className="display class-name">{cls.name}</span>
+        <p className="class-line">{cls.line}</p>
+        <div className="class-stats">
+          {ATTR_ORDER.map((a) => (
+            <div key={a} className={`class-stat attr-${a}`}>
+              <Badge3D icon={a} tone={a} size={30} />
+              <span className="display">{attrs[a]}</span>
+              <span className="class-stat-name">{ATTR_LABEL[a]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
-      <ul className="attrs">
-        {ATTR_ORDER.map((a) => (
-          <li key={a} className={`attr attr-${a}`}>
-            <span className="attr-name">{ATTR_LABEL[a]}</span>
-            <span className="attr-bar">
-              <span style={{ width: `${(attrs[a] / maxAttr) * 100}%` }} />
-            </span>
-            <span className="display attr-val">{attrs[a]}</span>
-          </li>
-        ))}
+      <h2>Dein Rating</h2>
+      <div className="rating">
+        <div className="rating-top">
+          <div className="rating-level">
+            <span className="display">{lvl.level}</span>
+            <span>Level</span>
+          </div>
+          <div className="rating-xp">
+            <span className="display">{xp.toLocaleString('de-DE')}</span>
+            <span>XP gesammelt</span>
+          </div>
+        </div>
+        <div className="xp-segments" role="progressbar" aria-valuemin={0} aria-valuemax={lvl.needed} aria-valuenow={lvl.intoLevel} aria-label="Fortschritt zum nächsten Level">
+          {Array.from({ length: segments }, (_, i) => (
+            <span key={i} className={i < filled ? 'on' : ''} />
+          ))}
+        </div>
+        <p className="rating-next">
+          {(lvl.needed - lvl.intoLevel).toLocaleString('de-DE')} XP bis Level {lvl.level + 1}
+        </p>
+      </div>
+
+      <div className="compare-head">
+        <span>Veränderung</span>
+        <Segmented
+          options={[
+            { value: 'week' as const, label: '7 Tage' },
+            { value: 'start' as const, label: 'Seit Tag 1' },
+          ]}
+          value={compare}
+          onChange={setCompare}
+        />
+      </div>
+      <ul className="attr-rows">
+        {ATTR_ORDER.map((a) => {
+          const delta = attrs[a] - baseline[a];
+          return (
+            <li key={a} className={`attr-row attr-${a}`}>
+              <Badge3D icon={a} tone={a} size={34} />
+              <span className="attr-row-name">{ATTR_LABEL[a]}</span>
+              <span className="display attr-row-val">{attrs[a]}</span>
+              <span className={`attr-delta ${delta > 0 ? 'up' : ''}`}>{delta > 0 ? `▲ ${delta}` : '±0'}</span>
+            </li>
+          );
+        })}
       </ul>
 
       <dl className="totals">

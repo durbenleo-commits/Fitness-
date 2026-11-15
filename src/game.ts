@@ -35,6 +35,8 @@ export interface QuestTemplate {
   noLevelScale?: boolean; // grows with difficulty only, not with level
   requires?: Equipment[]; // needs at least one of these
   jump?: boolean; // involves jumping (left out with "no jumping")
+  fixed?: boolean; // appears every day
+  retired?: boolean; // no longer handed out
 }
 
 export type Equipment =
@@ -90,11 +92,13 @@ export const QUEST_POOL: QuestTemplate[] = [
   { id: 'wallsit', title: 'Wandsitzen', icon: '🧱', attr: 'staerke', base: 40, step: 5, unit: 'Sek.', xp: 25 },
   { id: 'plank', title: 'Unterarmstütz', icon: '🪵', attr: 'ausdauer', base: 40, step: 5, unit: 'Sek.', xp: 30 },
   { id: 'run', title: 'Laufen', icon: '🏃', attr: 'ausdauer', base: 2, step: 0.5, unit: 'km', xp: 45, requires: ['outdoor', 'treadmill'] },
-  { id: 'walk', title: 'Spaziergang', icon: '👟', attr: 'ausdauer', base: 20, step: 5, unit: 'Min.', xp: 25, requires: ['outdoor', 'treadmill'] },
+  // Retired: the daily step quest replaces it. Kept so old days still show its name.
+  { id: 'walk', title: 'Spaziergang', icon: '👟', attr: 'ausdauer', base: 20, step: 5, unit: 'Min.', xp: 25, requires: ['outdoor', 'treadmill'], retired: true },
   { id: 'jacks', title: 'Hampelmänner', icon: '⭐', attr: 'ausdauer', base: 40, step: 5, unit: 'Wdh.', xp: 25, jump: true },
   { id: 'burpees', title: 'Hockstrecksprünge', icon: '⚡', attr: 'ausdauer', base: 8, step: 1, unit: 'Wdh.', xp: 40, jump: true },
   { id: 'mountain', title: 'Bergsteiger', icon: '⛰️', attr: 'ausdauer', base: 30, step: 5, unit: 'Wdh.', xp: 30 },
-  { id: 'steps', title: 'Schritte', icon: '👣', attr: 'ausdauer', base: 6000, step: 500, unit: 'Schritte', xp: 30, noLevelScale: true },
+  // Fixed: part of every day, never drawn at random or swapped.
+  { id: 'steps', title: 'Schritte', icon: '👣', attr: 'ausdauer', base: 7000, step: 500, unit: 'Schritte', xp: 30, noLevelScale: true, fixed: true },
   { id: 'stairs', title: 'Treppen steigen', icon: '🪜', attr: 'ausdauer', base: 6, step: 1, unit: 'Stockwerke', xp: 30, requires: ['stairs'] },
   { id: 'stretch', title: 'Dehnen', icon: '🧘', attr: 'beweglichkeit', base: 8, step: 1, unit: 'Min.', xp: 25 },
   { id: 'mobility', title: 'Mobilisation', icon: '🌀', attr: 'beweglichkeit', base: 10, step: 1, unit: 'Min.', xp: 30 },
@@ -247,7 +251,7 @@ export function rankFor(level: number): string {
 export function randomPool(
   state: Pick<GameState, 'customQuests' | 'disabledQuests'> & { profile?: Profile | null },
 ): QuestTemplate[] {
-  const possible = QUEST_POOL.filter((q) => !unavailableReason(q, state.profile));
+  const possible = QUEST_POOL.filter((q) => !q.fixed && !q.retired && !unavailableReason(q, state.profile));
   const pool = [...possible.filter((q) => !state.disabledQuests.includes(q.id)), ...state.customQuests.filter((q) => !q.daily)];
   return pool.length > 0 ? pool : possible;
 }
@@ -341,16 +345,18 @@ export function generateDay(
   difficulty: Difficulty,
   pool: QuestTemplate[] = QUEST_POOL,
   daily: QuestTemplate[] = [],
+  fixed: QuestTemplate[] = FIXED_QUESTS,
 ): DayLog {
   const rand = mulberry32(hash(date));
   const pick = (list: QuestTemplate[]) => list[Math.floor(rand() * list.length)];
-  const chosen: QuestTemplate[] = [];
+  const random = pool.filter((q) => !fixed.includes(q) && !q.fixed && !q.retired);
+  const chosen: QuestTemplate[] = [...fixed];
   for (const attr of QUEST_ATTRS) {
-    const options = pool.filter((q) => q.attr === attr);
-    if (options.length > 0) chosen.push(pick(options));
+    const options = random.filter((q) => q.attr === attr && !chosen.includes(q));
+    if (options.length > 0 && chosen.length < QUESTS_PER_DAY) chosen.push(pick(options));
   }
   while (chosen.length < QUESTS_PER_DAY) {
-    const options = pool.filter((t) => !chosen.includes(t));
+    const options = random.filter((t) => !chosen.includes(t));
     if (options.length === 0) break;
     chosen.push(pick(options));
   }
@@ -371,6 +377,7 @@ export function rerollQuest(
 ): DayLog {
   const idx = day.quests.findIndex((q) => q.id === questId);
   if (idx < 0 || day.quests[idx].done || day.rerollsUsed >= REROLLS_PER_DAY) return day;
+  if (FIXED_QUESTS.some((t) => t.id === day.quests[idx].templateId)) return day;
   const used = new Set(day.quests.map((q) => q.templateId));
   const current = day.quests[idx];
   let options = pool.filter((t) => t.attr === current.attr && !used.has(t.id));
@@ -384,7 +391,11 @@ export function rerollQuest(
 }
 
 /** Is this one of the daily custom quests (which cannot be swapped)? */
+export const FIXED_QUESTS = QUEST_POOL.filter((q) => q.fixed);
+
+/** Pinned quests (the daily step goal, daily custom quests) cannot be swapped. */
 export const isDailyInstance = (state: Pick<GameState, 'customQuests'>, q: QuestInstance) =>
+  FIXED_QUESTS.some((t) => t.id === q.templateId) ||
   !!state.customQuests.find((t) => t.id === q.templateId && t.daily);
 
 // ---------- derived stats ----------
@@ -412,16 +423,51 @@ export function totalXp(state: GameState, filter: DayFilter = everyDay): number 
 export const ENEMY_ATTR_POINTS = 2;
 export const BOSS_ATTR_POINTS = 5;
 
-export function attributes(state: GameState): Record<Attr, number> {
+export function attributes(state: GameState, filter: DayFilter = everyDay): Record<Attr, number> {
   const out: Record<Attr, number> = { staerke: 0, ausdauer: 0, beweglichkeit: 0, disziplin: 0 };
-  for (const day of Object.values(state.days)) {
+  for (const day of daysWhere(state, filter)) {
     for (const q of day.quests) if (q.done) out[q.attr] += 1;
     if (isCleared(day)) out.disziplin += 1;
   }
   for (const b of state.battles) {
-    if (b.defeatedOn) out[b.attr] += b.boss ? BOSS_ATTR_POINTS : ENEMY_ATTR_POINTS;
+    if (b.defeatedOn && filter(b.defeatedOn)) out[b.attr] += b.boss ? BOSS_ATTR_POINTS : ENEMY_ATTR_POINTS;
   }
   return out;
+}
+
+/** Everything up to and including `date`. */
+export const until = (date: string): DayFilter => (d) => d <= date;
+
+export interface PlayerClass {
+  name: string;
+  line: string;
+}
+
+/**
+ * An RPG class from the attribute mix: the leading attribute, or a hybrid when
+ * two are close (within 20 %), or an all-rounder when all three are.
+ */
+export function playerClass(a: Record<Attr, number>): PlayerClass {
+  const main = (['staerke', 'ausdauer', 'beweglichkeit'] as const).map((k) => [k, a[k]] as const).sort((x, y) => y[1] - x[1]);
+  const [first, second, third] = main;
+  if (first[1] < 5) return { name: 'Rekrut', line: 'Jede Klasse fängt hier an. Deine ersten Quests entscheiden, wohin es geht.' };
+  const close = (v: number) => v >= first[1] * 0.8;
+  if (close(second[1]) && close(third[1])) return { name: 'Allrounder', line: 'Kraft, Ausdauer, Beweglichkeit: bei dir ist alles im Gleichgewicht.' };
+  if (close(second[1])) {
+    const pair = [first[0], second[0]].sort().join('+');
+    const hybrids: Record<string, PlayerClass> = {
+      'ausdauer+staerke': { name: 'Gladiator', line: 'Stark und zäh. Du hältst länger durch als deine Gegner.' },
+      'beweglichkeit+staerke': { name: 'Kampfkünstler', line: 'Kraft mit Kontrolle. Jede Bewegung sitzt.' },
+      'ausdauer+beweglichkeit': { name: 'Waldläufer', line: 'Leichtfüßig und ausdauernd. Kein Weg ist dir zu weit.' },
+    };
+    return hybrids[pair];
+  }
+  const solo: Record<string, PlayerClass> = {
+    staerke: { name: 'Krieger', line: 'Deine Stärke führt. Liegestütze und Kniebeugen sind deine Waffen.' },
+    ausdauer: { name: 'Läufer', line: 'Deine Ausdauer führt. Du gehst weiter, wenn andere stehen bleiben.' },
+    beweglichkeit: { name: 'Akrobat', line: 'Deine Beweglichkeit führt. Geschmeidig, schnell, schwer zu treffen.' },
+  };
+  return solo[first[0]];
 }
 
 /** Consecutive cleared days ending today (or yesterday, if today is still open). */
