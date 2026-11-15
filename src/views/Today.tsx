@@ -22,7 +22,7 @@ import type { Game } from '../store';
 import { isScannable } from '../pose';
 import { AttrTile, Badge3D, Icon } from './Icons';
 import { Scanner } from './Scanner';
-import { Monster } from './Monster';
+import { Sprite } from './Sprites';
 import { SEASON_OPTIONS } from './Onboarding';
 import { Segmented } from './ui';
 
@@ -216,7 +216,7 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
 
       {enemy && (
         <button className={`arena-teaser attr-${enemy.attr} ${enemy.defeatedOn ? 'won' : ''}`} onClick={onOpenArena}>
-          <Monster enemyId={enemy.enemyId} attr={enemy.attr} className="teaser-monster" />
+          <Sprite enemyId={enemy.enemyId} className="teaser-monster" />
           <span className="teaser-text">
             <span className="teaser-label">Heute in der Arena</span>
             <strong>{enemy.name}</strong>

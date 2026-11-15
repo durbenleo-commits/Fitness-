@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { DEFAULT_EQUIPMENT, DIFFICULTY_LABEL, toDateKey, type Difficulty, type Equipment, type Profile } from '../game';
-import { Monster } from './Monster';
+import { Sprite } from './Sprites';
 import { EquipmentPicker, Segmented } from './ui';
 
 export function Onboarding({ onStart }: { onStart: (p: Profile) => void }) {
@@ -18,9 +18,9 @@ export function Onboarding({ onStart }: { onStart: (p: Profile) => void }) {
   return (
     <form className="onboarding" onSubmit={submit}>
       <div className="onboarding-hero" aria-hidden>
-        <Monster enemyId="faulpelz" attr="beweglichkeit" className="hero-m left" />
-        <Monster enemyId="schweinehund" attr="staerke" className="hero-m mid" />
-        <Monster enemyId="handy-zombie" attr="ausdauer" className="hero-m right" />
+        <Sprite enemyId="faulpelz" className="hero-m left" />
+        <Sprite enemyId="schweinehund" className="hero-m mid" />
+        <Sprite enemyId="handy-zombie" className="hero-m right" />
       </div>
       <div className="onboarding-title">
         <span className="display big">Questfit</span>

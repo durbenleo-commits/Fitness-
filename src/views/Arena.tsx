@@ -1,25 +1,29 @@
+// The arena as an RPG battle: pick an opponent, it stands on a stage with its
+// health bar and a taunt, and the exercises are the attack menu below.
 import { useState } from 'react';
 import {
+  ENEMIES_PER_DAY,
   battleStatus,
+  currentEnemy,
+  enemiesOf,
   hpLeft,
   phaseProgress,
   quickAmounts,
   weekStart,
   type Battle,
   type BattlePhase,
-  ENEMIES_PER_DAY,
-  currentEnemy,
-  enemiesOf,
 } from '../battle';
 import { ATTR_LABEL, BOSS_ATTR_POINTS, ENEMY_ATTR_POINTS, QUEST_POOL, addDays, daysBetween, formatDate, type QuestAttr } from '../game';
 import { isScannable } from '../pose';
+import type { Game } from '../store';
 import { AttrTile, Icon } from './Icons';
 import { Scanner } from './Scanner';
-import { Monster } from './Monster';
+import { Sprite } from './Sprites';
 
 const phaseAttr = (p: BattlePhase): QuestAttr =>
   p.kind === 'exercise' ? (QUEST_POOL.find((q) => q.id === p.exerciseId)?.attr ?? 'staerke') : 'ausdauer';
-import type { Game } from '../store';
+
+const HP_PER_PHASE = 100;
 
 export function ArenaView({ game, today }: { game: Game; today: string }) {
   const { state } = game;
@@ -27,39 +31,48 @@ export function ArenaView({ game, today }: { game: Game; today: string }) {
   const wave = enemy ? enemiesOf(state.battles, today).indexOf(enemy) + 1 : 0;
   const boss = state.battles.find((b) => b.id === `boss-${weekStart(today)}`);
   const nextMonday = addDays(weekStart(today), 7);
+  const [pick, setPick] = useState<'enemy' | 'boss'>(enemy && !enemy.defeatedOn ? 'enemy' : boss ? 'boss' : 'enemy');
+  const selected = pick === 'boss' && boss ? boss : enemy;
   const past = state.battles.filter((b) => b.id !== enemy?.id && b.id !== boss?.id).reverse();
-  const wins = state.battles.filter((b) => b.defeatedOn);
+  const wins = state.battles.filter((b) => b.defeatedOn).length;
 
   return (
     <section className="arena">
       <div className="section-head">
         <h1>Arena</h1>
-        <span className="count">{wins.length === 1 ? "1 Sieg" : `${wins.length} Siege`}</span>
+        <span className="count">{wins === 1 ? '1 Sieg' : `${wins} Siege`}</span>
       </div>
 
-      {enemy && (
-        <>
-          <p className="wave-note">
-            Gegner {wave} von {ENEMIES_PER_DAY} heute
-            {enemy.defeatedOn && wave === ENEMIES_PER_DAY ? '. Alle geschafft, morgen geht es weiter.' : ''}
-          </p>
-          <BattleCard battle={enemy} game={game} today={today} />
-        </>
-      )}
+      <div className="foe-picker" role="tablist" aria-label="Gegner wählen">
+        {enemy && (
+          <button role="tab" aria-selected={selected === enemy} onClick={() => setPick('enemy')} className={enemy.defeatedOn ? 'won' : ''}>
+            <Sprite enemyId={enemy.enemyId} className="foe-mini" />
+            <span>
+              <strong>Gegner {wave}/{ENEMIES_PER_DAY}</strong>
+              <small>{enemy.defeatedOn ? 'Besiegt' : 'Nur heute'}</small>
+            </span>
+          </button>
+        )}
+        {boss ? (
+          <button role="tab" aria-selected={selected === boss} onClick={() => setPick('boss')} className={`boss ${boss.defeatedOn ? 'won' : ''}`}>
+            <Sprite enemyId={boss.enemyId} className="foe-mini" />
+            <span>
+              <strong>Wochen-Boss</strong>
+              <small>{boss.defeatedOn ? 'Besiegt' : `bis ${formatDate(boss.end, { weekday: 'short' })}`}</small>
+            </span>
+          </button>
+        ) : (
+          <div className="foe-locked">
+            <span className="display">?</span>
+            <span>
+              <strong>Wochen-Boss</strong>
+              <small>ab {formatDate(nextMonday, { weekday: 'short', day: 'numeric', month: 'short' })}</small>
+            </span>
+          </div>
+        )}
+      </div>
 
-      <h2>Wochen-Boss</h2>
-      {boss ? (
-        <BattleCard battle={boss} game={game} today={today} />
-      ) : (
-        <p className="boss-wait">
-          <span className="boss-wait-icon" aria-hidden>
-            ?
-          </span>
-          <span>
-            Der nächste Boss taucht am {formatDate(nextMonday, { weekday: 'long', day: 'numeric', month: 'long' })} auf. Er bleibt die ganze Woche und hat drei Phasen.
-          </span>
-        </p>
-      )}
+      {selected && <BattleView key={selected.id} battle={selected} game={game} today={today} />}
 
       {past.length > 0 && (
         <>
@@ -69,7 +82,7 @@ export function ArenaView({ game, today }: { game: Game; today: string }) {
               const status = battleStatus(b, today);
               return (
                 <li key={b.id} className={status}>
-                  <Monster enemyId={b.enemyId} attr={b.attr} className="pb-monster" />
+                  <Sprite enemyId={b.enemyId} className="pb-monster" />
                   <span className="pb-name">
                     {b.name}
                     {b.boss && <span className="tag boss">Boss</span>}
@@ -85,67 +98,109 @@ export function ArenaView({ game, today }: { game: Game; today: string }) {
   );
 }
 
-function BattleCard({ battle: b, game, today }: { battle: Battle; game: Game; today: string }) {
+function BattleView({ battle: b, game, today }: { battle: Battle; game: Game; today: string }) {
   const health = game.state.health.connected ? game.state.health.days : null;
   const status = battleStatus(b, today);
-  const hp = hpLeft(b, health);
-  const [shake, setShake] = useState(0);
-  const [hitText, setHitText] = useState<string | null>(null);
+  const maxHp = b.phases.length * HP_PER_PHASE;
+  const hp = Math.round(hpLeft(b, health) * maxHp);
+  const [hit, setHit] = useState(0);
+  const [hitText, setHitText] = useState('');
   const [scanPhase, setScanPhase] = useState<BattlePhase | null>(null);
 
   const attack = (phase: BattlePhase, amount: number) => {
+    const before = phaseProgress(b, phase, health);
+    const dealt = Math.round((Math.min(before + amount, phase.target) - Math.min(before, phase.target)) / phase.target * HP_PER_PHASE);
     game.hit(b.id, phase.id, amount);
-    setShake((n) => n + 1);
-    setHitText(`−${amount.toLocaleString('de-DE')}`);
+    setHit((n) => n + 1);
+    setHitText(`−${Math.max(dealt, 1)}`);
     navigator.vibrate?.(40);
   };
 
   const daysLeft = daysBetween(today, b.end);
-  const deadline = b.boss
-    ? daysLeft === 0
-      ? 'Letzter Tag!'
-      : `Noch ${daysLeft + 1} Tage, bis ${formatDate(b.end, { weekday: 'long' })}`
-    : 'Nur heute';
+  const deadline = b.boss ? (daysLeft === 0 ? 'Letzter Tag!' : `Noch ${daysLeft + 1} Tage`) : 'Nur heute';
+  const firstOpen = b.phases.find((p) => phaseProgress(b, p, health) < p.target)?.id;
 
   return (
-    <article className={`battle attr-${b.attr} ${b.boss ? 'is-boss' : ''} ${status}`} aria-label={b.name}>
-      <header className="battle-head">
-        <div key={shake} className={`enemy-portrait ${shake ? 'hit' : ''}`} aria-hidden>
-          <Monster enemyId={b.enemyId} attr={b.attr} className="monster" />
-          {hitText && shake > 0 && (
-            <span key={shake} className="dmg display">
-              {hitText}
-            </span>
-          )}
-        </div>
-        <div className="enemy-info">
-          <div className="enemy-tags">
+    <div className={`battle-wrap attr-${b.attr}`}>
+      <div className={`scene ${b.boss ? 'boss' : ''} ${status}`} aria-label={`${b.name}, ${hp} von ${maxHp} Lebenspunkten`}>
+        <span className="torch left" aria-hidden />
+        <span className="torch right" aria-hidden />
+        <span className="scene-floor" aria-hidden />
+
+        <div className="nameplate">
+          <div className="np-top">
+            <strong>{b.name}</strong>
             {b.boss && <span className="tag boss">Boss</span>}
             {b.elite && <span className="tag elite">Elite</span>}
-            <span className="tag">{ATTR_LABEL[b.attr]}</span>
           </div>
-          <h3 className="enemy-name">{b.name}</h3>
-          <p className="taunt">„{b.taunt}“</p>
-        </div>
-      </header>
-
-      <div className="hp" role="progressbar" aria-label="Lebenspunkte des Gegners" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(hp * 100)}>
-        <div className="hp-fill" style={{ width: `${hp * 100}%` }} />
-      </div>
-      <div className="hp-meta">
-        <span>{Math.round(hp * 100)} % Lebenspunkte</span>
-        <span>{status === 'active' ? deadline : ''}</span>
-      </div>
-
-      {status === 'defeated' && (
-        <p className="victory">
-          <span className="display">Besiegt</span>
-          <span>
-            +{b.xp} XP und +{b.boss ? BOSS_ATTR_POINTS : ENEMY_ATTR_POINTS} {ATTR_LABEL[b.attr]}
+          <div className="np-hp">
+            <span className="np-label">HP</span>
+            <span className="hp" role="progressbar" aria-valuemin={0} aria-valuemax={maxHp} aria-valuenow={hp}>
+              <span className="hp-fill" style={{ width: `${(hp / maxHp) * 100}%` }} />
+            </span>
+          </div>
+          <span className="np-num">
+            {hp} / {maxHp}
           </span>
-        </p>
+        </div>
+
+        {status === 'active' && <p className="bubble">„{b.taunt}“</p>}
+
+        <div key={hit} className={`sprite-wrap ${hit ? 'hit' : ''}`}>
+          <Sprite enemyId={b.enemyId} className="scene-sprite" />
+          {hit > 0 && (
+            <>
+              <span className="slash" aria-hidden />
+              <span className="dmg display" aria-hidden>
+                {hitText}
+              </span>
+            </>
+          )}
+        </div>
+
+        <span className="scene-chip">{status === 'active' ? deadline : status === 'defeated' ? 'Besiegt' : 'Entkommen'}</span>
+
+        {status === 'defeated' && (
+          <div className="scene-banner">
+            <span className="display">Sieg</span>
+            <span>
+              +{b.xp} XP · +{b.boss ? BOSS_ATTR_POINTS : ENEMY_ATTR_POINTS} {ATTR_LABEL[b.attr]}
+            </span>
+          </div>
+        )}
+        {status === 'escaped' && (
+          <div className="scene-banner lost">
+            <span className="display">Entkommen</span>
+            <span>Morgen wartet ein neuer Gegner.</span>
+          </div>
+        )}
+      </div>
+
+      {status === 'active' && (
+        <div className="command-box">
+          <div className="cmd-head">
+            <span>Angriffe</span>
+            <span className="cmd-reward">Sieg: +{b.xp} XP</span>
+          </div>
+          <ul className="moves">
+            {b.phases.map((p) => (
+              <Move
+                key={p.id}
+                phase={p}
+                active={p.id === firstOpen}
+                progress={phaseProgress(b, p, health)}
+                fromHealth={!!health && p.kind !== 'exercise'}
+                hasToday={p.log.some((l) => l.date === today)}
+                cameraOnly={!!game.state.profile?.cameraRequired}
+                onAttack={(n) => attack(p, n)}
+                onCamera={() => setScanPhase(p)}
+                onUndo={() => game.undoHit(b.id, p.id)}
+              />
+            ))}
+          </ul>
+          <p className="cmd-hint">Trag ein, was du gemacht hast. Jede Wiederholung trifft.</p>
+        </div>
       )}
-      {status === 'escaped' && <p className="escaped-note">Entkommen. Morgen wartet ein neuer Gegner.</p>}
 
       {scanPhase && (
         <Scanner
@@ -161,46 +216,22 @@ function BattleCard({ battle: b, game, today }: { battle: Battle; game: Game; to
           onClose={() => setScanPhase(null)}
         />
       )}
-
-      <ul className="phases">
-        {b.phases.map((p) => (
-          <PhaseRow
-            key={p.id}
-            phase={p}
-            progress={phaseProgress(b, p, health)}
-            fromHealth={!!health && p.kind !== 'exercise'}
-            canAct={status === 'active'}
-            hasToday={p.log.some((l) => l.date === today)}
-            onAttack={(n) => attack(p, n)}
-            onCamera={() => setScanPhase(p)}
-            cameraOnly={!!game.state.profile?.cameraRequired}
-            onUndo={() => game.undoHit(b.id, p.id)}
-          />
-        ))}
-      </ul>
-
-      {status === 'active' && (
-        <p className="small-text battle-hint">
-          {b.phases.length > 1 ? 'Bring alle Balken auf voll. ' : ''}
-          Trag ein, was du gemacht hast. Jede Wiederholung ist ein Treffer. Sieg bringt {b.xp} XP.
-        </p>
-      )}
-    </article>
+    </div>
   );
 }
 
-function PhaseRow(props: {
+function Move(props: {
   phase: BattlePhase;
+  active: boolean;
   progress: number;
   fromHealth: boolean;
-  canAct: boolean;
   hasToday: boolean;
   cameraOnly: boolean;
   onAttack: (n: number) => void;
   onCamera: () => void;
   onUndo: () => void;
 }) {
-  const { phase: p, progress, fromHealth, canAct, hasToday, cameraOnly, onAttack, onCamera, onUndo } = props;
+  const { phase: p, active, progress, fromHealth, hasToday, cameraOnly, onAttack, onCamera, onUndo } = props;
   const scannable = p.kind === 'exercise' && isScannable(p.exerciseId);
   const manual = !(scannable && cameraOnly);
   const done = progress >= p.target;
@@ -208,21 +239,28 @@ function PhaseRow(props: {
   const fmt = (n: number) => n.toLocaleString('de-DE');
 
   return (
-    <li className={`phase attr-${phaseAttr(p)} ${done ? 'done' : ''}`}>
-      <div className="phase-top">
+    <li className={`move attr-${phaseAttr(p)} ${done ? 'done' : ''} ${active ? 'active' : ''}`}>
+      <div className="move-top">
+        <span className="cursor" aria-hidden>
+          ▸
+        </span>
         <AttrTile attr={phaseAttr(p)} size="sm" />
-        <span className="phase-title">{p.title}</span>
-        <span className="phase-count">
-          <strong>{fmt(Math.min(progress, p.target))}</strong> / {fmt(p.target)} {p.unit}
+        <span className="move-name">{p.title}</span>
+        <span className="move-count">
+          {done ? (
+            <Icon name="check" size={18} />
+          ) : (
+            <>
+              noch <strong>{fmt(rest)}</strong> {p.unit}
+            </>
+          )}
         </span>
       </div>
       <div className="phase-bar">
         <span style={{ width: `${Math.min(progress / p.target, 1) * 100}%` }} />
       </div>
-
-      {fromHealth && !done && <p className="small-text">Wird automatisch aus Samsung Health übernommen.</p>}
-
-      {canAct && !done && !fromHealth && (
+      {fromHealth && !done && <p className="move-note">Kommt automatisch aus Samsung Health.</p>}
+      {!done && !fromHealth && (
         <div className="attacks">
           {scannable && (
             <button className="attack camera" onClick={onCamera}>
@@ -241,14 +279,14 @@ function PhaseRow(props: {
               ))}
           {manual && (
             <button className="attack finish" onClick={() => onAttack(rest)}>
-              Rest: {fmt(rest)}
+              Alle {fmt(rest)}
             </button>
           )}
         </div>
       )}
-      {canAct && hasToday && !fromHealth && (
+      {hasToday && !fromHealth && (
         <button className="link-button undo" onClick={onUndo}>
-          Letzten Eintrag zurücknehmen
+          Letzten Treffer zurücknehmen
         </button>
       )}
     </li>
