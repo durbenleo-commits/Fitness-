@@ -1,5 +1,6 @@
 // Pure game logic: no React, no storage. Everything here is unit-tested.
 import type { Battle, HealthDay } from './battle';
+import type { IconName } from './views/Icons';
 
 export type Attr = 'staerke' | 'ausdauer' | 'beweglichkeit' | 'disziplin';
 export type QuestAttr = Exclude<Attr, 'disziplin'>;
@@ -49,18 +50,18 @@ export type Equipment =
   | 'pool'
   | 'gym';
 
-export const EQUIPMENT: { id: Equipment; label: string; icon: string }[] = [
-  { id: 'outdoor', label: 'Draußen laufen und gehen', icon: '🌳' },
-  { id: 'stairs', label: 'Treppen', icon: '🪜' },
-  { id: 'dumbbells', label: 'Kurzhanteln', icon: '🏋️' },
-  { id: 'kettlebell', label: 'Kettlebell', icon: '🔔' },
-  { id: 'bar', label: 'Klimmzugstange', icon: '🔩' },
-  { id: 'band', label: 'Widerstandsband', icon: '🎗️' },
-  { id: 'rope', label: 'Springseil', icon: '🪢' },
-  { id: 'bike', label: 'Fahrrad oder Heimtrainer', icon: '🚴' },
-  { id: 'treadmill', label: 'Laufband', icon: '🏃' },
-  { id: 'pool', label: 'Schwimmbad', icon: '🏊' },
-  { id: 'gym', label: 'Fitnessstudio', icon: '🏢' },
+export const EQUIPMENT: { id: Equipment; label: string; icon: IconName }[] = [
+  { id: 'outdoor', label: 'Draußen laufen und gehen', icon: 'tree' },
+  { id: 'stairs', label: 'Treppen', icon: 'stairs' },
+  { id: 'dumbbells', label: 'Kurzhanteln', icon: 'staerke' },
+  { id: 'kettlebell', label: 'Kettlebell', icon: 'kettlebell' },
+  { id: 'bar', label: 'Klimmzugstange', icon: 'bar' },
+  { id: 'band', label: 'Widerstandsband', icon: 'band' },
+  { id: 'rope', label: 'Springseil', icon: 'rope' },
+  { id: 'bike', label: 'Fahrrad oder Heimtrainer', icon: 'bike' },
+  { id: 'treadmill', label: 'Laufband', icon: 'treadmill' },
+  { id: 'pool', label: 'Schwimmbad', icon: 'pool' },
+  { id: 'gym', label: 'Fitnessstudio', icon: 'gym' },
 ];
 
 /** A gym has all the smaller gear too. */

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DEFAULT_EQUIPMENT, DIFFICULTY_LABEL, toDateKey, type Difficulty, type Equipment, type Profile } from '../game';
+import { Monster } from './Monster';
 import { EquipmentPicker, Segmented } from './ui';
 
 export function Onboarding({ onStart }: { onStart: (p: Profile) => void }) {
@@ -16,9 +17,16 @@ export function Onboarding({ onStart }: { onStart: (p: Profile) => void }) {
 
   return (
     <form className="onboarding" onSubmit={submit}>
+      <div className="onboarding-hero" aria-hidden>
+        <Monster enemyId="faulpelz" attr="beweglichkeit" className="hero-m left" />
+        <Monster enemyId="schweinehund" attr="staerke" className="hero-m mid" />
+        <Monster enemyId="handy-zombie" attr="ausdauer" className="hero-m right" />
+      </div>
       <div className="onboarding-title">
-        <span className="display big">Level 1</span>
-        <p className="lead">Jeden Tag vier Sport-Quests. Erledige sie, sammle XP und steig im Level auf.</p>
+        <span className="display big">Questfit</span>
+        <p className="lead">
+          Deine Ausreden haben Gesichter. Jeden Tag vier Sport-Quests und ein Gegner, der besiegt werden will.
+        </p>
       </div>
 
       <label className="field">

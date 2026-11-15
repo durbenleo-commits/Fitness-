@@ -39,7 +39,7 @@ export function ArenaView({ game, today }: { game: Game; today: string }) {
       ) : (
         <p className="boss-wait">
           <span className="boss-wait-icon" aria-hidden>
-            ❔
+            ?
           </span>
           <span>
             Der nächste Boss taucht am {formatDate(nextMonday, { weekday: 'long', day: 'numeric', month: 'long' })} auf. Er bleibt die ganze Woche und hat drei Phasen.

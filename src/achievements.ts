@@ -1,3 +1,4 @@
+import type { IconName } from './views/Icons';
 import { defeated } from './battle';
 import {
   attributes,
@@ -13,7 +14,8 @@ import {
 
 export interface Achievement {
   id: string;
-  icon: string;
+  icon: IconName;
+  tier: 'bronze' | 'silver' | 'gold';
   title: string;
   description: string;
   target: number;
@@ -31,31 +33,31 @@ interface Context {
 }
 
 export const ACHIEVEMENTS: Achievement[] = [
-  { id: 'first-quest', icon: '🎯', title: 'Erster Schritt', description: 'Erledige deine erste Quest.', target: 1, progress: (c) => c.quests },
-  { id: 'first-clear', icon: '✅', title: 'Tag geschafft', description: 'Erledige an einem Tag alle Quests.', target: 1, progress: (c) => c.cleared },
-  { id: 'streak-3', icon: '🔥', title: 'Warm gelaufen', description: '3 Tage in Folge alle Quests.', target: 3, progress: (c) => c.best },
-  { id: 'streak-7', icon: '📅', title: 'Eine Woche', description: '7 Tage in Folge alle Quests.', target: 7, progress: (c) => c.best },
-  { id: 'streak-14', icon: '⛓️', title: 'Nicht zu stoppen', description: '14 Tage in Folge alle Quests.', target: 14, progress: (c) => c.best },
-  { id: 'streak-30', icon: '🏆', title: 'Eiserner Wille', description: '30 Tage in Folge alle Quests.', target: 30, progress: (c) => c.best },
-  { id: 'quests-50', icon: '🎒', title: 'Fleißig', description: 'Erledige 50 Quests.', target: 50, progress: (c) => c.quests },
-  { id: 'quests-200', icon: '🧗', title: 'Dauerbrenner', description: 'Erledige 200 Quests.', target: 200, progress: (c) => c.quests },
-  { id: 'level-5', icon: '⬆️', title: 'Aufsteiger', description: 'Erreiche Level 5.', target: 5, progress: (c) => c.level },
-  { id: 'level-10', icon: '🎖️', title: 'Kämpfer', description: 'Erreiche Level 10.', target: 10, progress: (c) => c.level },
-  { id: 'level-20', icon: '👑', title: 'Elite', description: 'Erreiche Level 20.', target: 20, progress: (c) => c.level },
-  { id: 'strength-25', icon: '💪', title: 'Kraftpaket', description: 'Erreiche 25 Punkte Stärke.', target: 25, progress: (c) => c.attrs.staerke },
-  { id: 'endurance-25', icon: '🫀', title: 'Langer Atem', description: 'Erreiche 25 Punkte Ausdauer.', target: 25, progress: (c) => c.attrs.ausdauer },
-  { id: 'flex-25', icon: '🤸', title: 'Gelenkig', description: 'Erreiche 25 Punkte Beweglichkeit.', target: 25, progress: (c) => c.attrs.beweglichkeit },
-  { id: 'pushups-500', icon: '🦾', title: '500 Liegestütze', description: 'Mach insgesamt 500 Liegestütze.', target: 500, progress: (c) => totalFor(c.state, 'pushups') },
-  { id: 'run-50', icon: '🏃', title: '50 Kilometer', description: 'Lauf insgesamt 50 km.', target: 50, progress: (c) => totalFor(c.state, 'run') },
-  { id: 'custom', icon: '✏️', title: 'Eigener Weg', description: 'Lege eine eigene Quest an.', target: 1, progress: (c) => c.state.customQuests.length },
-  { id: 'enemy-1', icon: '⚔️', title: 'Erster Sieg', description: 'Besiege deinen ersten Gegner.', target: 1, progress: (c) => defeated(c.state).filter((b) => !b.boss).length },
-  { id: 'enemy-10', icon: '🗡️', title: 'Monsterjäger', description: 'Besiege 10 Gegner.', target: 10, progress: (c) => defeated(c.state).filter((b) => !b.boss).length },
-  { id: 'enemy-30', icon: '🛡️', title: 'Arena-Held', description: 'Besiege 30 Gegner.', target: 30, progress: (c) => defeated(c.state).filter((b) => !b.boss).length },
-  { id: 'boss-1', icon: '💀', title: 'Bossbezwinger', description: 'Besiege einen Wochen-Boss.', target: 1, progress: (c) => defeated(c.state).filter((b) => b.boss).length },
-  { id: 'boss-5', icon: '🐗', title: 'Schweinehund-Zähmer', description: 'Besiege 5 Wochen-Bosse.', target: 5, progress: (c) => defeated(c.state).filter((b) => b.boss).length },
+  { id: 'first-quest', icon: 'target', tier: 'bronze', title: 'Erster Schritt', description: 'Erledige deine erste Quest.', target: 1, progress: (c) => c.quests },
+  { id: 'first-clear', icon: 'check', tier: 'bronze', title: 'Tag geschafft', description: 'Erledige an einem Tag alle Quests.', target: 1, progress: (c) => c.cleared },
+  { id: 'streak-3', icon: 'flame', tier: 'bronze', title: 'Warm gelaufen', description: '3 Tage in Folge alle Quests.', target: 3, progress: (c) => c.best },
+  { id: 'streak-7', icon: 'calendar', tier: 'silver', title: 'Eine Woche', description: '7 Tage in Folge alle Quests.', target: 7, progress: (c) => c.best },
+  { id: 'streak-14', icon: 'chain', tier: 'silver', title: 'Nicht zu stoppen', description: '14 Tage in Folge alle Quests.', target: 14, progress: (c) => c.best },
+  { id: 'streak-30', icon: 'trophy', tier: 'gold', title: 'Eiserner Wille', description: '30 Tage in Folge alle Quests.', target: 30, progress: (c) => c.best },
+  { id: 'quests-50', icon: 'today', tier: 'bronze', title: 'Fleißig', description: 'Erledige 50 Quests.', target: 50, progress: (c) => c.quests },
+  { id: 'quests-200', icon: 'mountain', tier: 'silver', title: 'Dauerbrenner', description: 'Erledige 200 Quests.', target: 200, progress: (c) => c.quests },
+  { id: 'level-5', icon: 'arrowUp', tier: 'bronze', title: 'Aufsteiger', description: 'Erreiche Level 5.', target: 5, progress: (c) => c.level },
+  { id: 'level-10', icon: 'medal', tier: 'silver', title: 'Kämpfer', description: 'Erreiche Level 10.', target: 10, progress: (c) => c.level },
+  { id: 'level-20', icon: 'crown', tier: 'gold', title: 'Elite', description: 'Erreiche Level 20.', target: 20, progress: (c) => c.level },
+  { id: 'strength-25', icon: 'staerke', tier: 'bronze', title: 'Kraftpaket', description: 'Erreiche 25 Punkte Stärke.', target: 25, progress: (c) => c.attrs.staerke },
+  { id: 'endurance-25', icon: 'ausdauer', tier: 'bronze', title: 'Langer Atem', description: 'Erreiche 25 Punkte Ausdauer.', target: 25, progress: (c) => c.attrs.ausdauer },
+  { id: 'flex-25', icon: 'beweglichkeit', tier: 'bronze', title: 'Gelenkig', description: 'Erreiche 25 Punkte Beweglichkeit.', target: 25, progress: (c) => c.attrs.beweglichkeit },
+  { id: 'pushups-500', icon: 'bolt', tier: 'silver', title: '500 Liegestütze', description: 'Mach insgesamt 500 Liegestütze.', target: 500, progress: (c) => totalFor(c.state, 'pushups') },
+  { id: 'run-50', icon: 'run', tier: 'silver', title: '50 Kilometer', description: 'Lauf insgesamt 50 km.', target: 50, progress: (c) => totalFor(c.state, 'run') },
+  { id: 'custom', icon: 'pencil', tier: 'bronze', title: 'Eigener Weg', description: 'Lege eine eigene Quest an.', target: 1, progress: (c) => c.state.customQuests.length },
+  { id: 'enemy-1', icon: 'arena', tier: 'bronze', title: 'Erster Sieg', description: 'Besiege deinen ersten Gegner.', target: 1, progress: (c) => defeated(c.state).filter((b) => !b.boss).length },
+  { id: 'enemy-10', icon: 'skull', tier: 'silver', title: 'Monsterjäger', description: 'Besiege 10 Gegner.', target: 10, progress: (c) => defeated(c.state).filter((b) => !b.boss).length },
+  { id: 'enemy-30', icon: 'shield', tier: 'gold', title: 'Arena-Held', description: 'Besiege 30 Gegner.', target: 30, progress: (c) => defeated(c.state).filter((b) => !b.boss).length },
+  { id: 'boss-1', icon: 'horns', tier: 'silver', title: 'Bossbezwinger', description: 'Besiege einen Wochen-Boss.', target: 1, progress: (c) => defeated(c.state).filter((b) => b.boss).length },
+  { id: 'boss-5', icon: 'crown', tier: 'gold', title: 'Schweinehund-Zähmer', description: 'Besiege 5 Wochen-Bosse.', target: 5, progress: (c) => defeated(c.state).filter((b) => b.boss).length },
   {
     id: 'steps-100k',
-    icon: '👣',
+    icon: 'steps', tier: 'silver',
     title: '100.000 Schritte',
     description: 'Geh insgesamt 100.000 Schritte (aus Samsung Health oder Schritte-Quests).',
     target: 100000,
@@ -63,7 +65,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'season',
-    icon: '🏁',
+    icon: 'flag', tier: 'gold',
     title: 'Saison beendet',
     description: 'Bring eine ganze Saison zu Ende.',
     target: 1,

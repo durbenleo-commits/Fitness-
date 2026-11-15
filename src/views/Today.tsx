@@ -17,7 +17,7 @@ import {
   type QuestInstance,
 } from '../game';
 import type { Game } from '../store';
-import { AttrTile, Icon } from './Icons';
+import { AttrTile, Badge3D, Icon } from './Icons';
 import { Monster } from './Monster';
 import { SEASON_OPTIONS } from './Onboarding';
 import { Segmented } from './ui';
@@ -31,9 +31,11 @@ export function Hud(props: { profile: Profile; level: number; intoLevel: number;
   return (
     <header className="hud">
       <div className="hud-top">
-        <div className="badge" aria-label={`Level ${level}`}>
-          <span className="badge-label">Lvl</span>
-          <span className="display badge-num">{level}</span>
+        <div className="badge-wrap" aria-label={`Level ${level}`}>
+          <div className="badge">
+            <span className="badge-label">Lvl</span>
+            <span className="display badge-num">{level}</span>
+          </div>
         </div>
         <div className="hud-who">
           <strong className="hud-name">{profile.name}</strong>
@@ -193,7 +195,11 @@ function QuestRow(props: { quest: QuestInstance; swapMode: boolean; swappable: b
           <span className="quest-unit">{q.unit}</span>
         </span>
         <span className="quest-check" aria-hidden>
-          {swapMode && swappable ? <Icon name="swap" size={20} /> : q.done ? <Icon name="check" size={22} /> : null}
+          {swapMode && swappable ? (
+            <Icon name="swap" size={20} />
+          ) : q.done ? (
+            <Badge3D icon="check" tone={q.attr} shape="coin" size={42} />
+          ) : null}
         </span>
         {burst > 0 && q.done && (
           <span key={burst} className="xp-burst display" aria-hidden>

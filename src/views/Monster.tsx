@@ -1,6 +1,8 @@
 // Hand-built SVG monsters: each enemy is assembled from a body, a face and a few extras,
 // coloured by its attribute. Original designs, consistent on every phone (no emoji).
+import { useId } from 'react';
 import type { QuestAttr } from '../game';
+import { mix } from './Icons';
 
 type Body = 'blob' | 'round' | 'ghost' | 'block' | 'rock';
 type Eyes = 'round' | 'sleepy' | 'angry' | 'spiral' | 'closed' | 'one';
@@ -69,6 +71,7 @@ function Eyes({ type }: { type: Eyes }) {
         <g key={x}>
           <circle cx={x} cy="47" r="8" fill={EYE} />
           <circle cx={x + 1.5} cy="48" r="4" fill={INK} />
+          <circle cx={x - 0.5} cy="46" r="1.5" fill={EYE} />
         </g>
       ));
     case 'sleepy':
@@ -85,6 +88,7 @@ function Eyes({ type }: { type: Eyes }) {
         <g key={x}>
           <circle cx={x} cy="49" r="7" fill={EYE} />
           <circle cx={x + (x < 50 ? 2 : -2)} cy="50" r="3.5" fill={INK} />
+          <circle cx={x + (x < 50 ? 1 : -3)} cy="48.6" r="1.2" fill={EYE} />
           <path d={x < 50 ? `M${x - 9} 38l16 6` : `M${x + 9} 38l-16 6`} stroke={INK} strokeWidth="4" strokeLinecap="round" />
         </g>
       ));
@@ -211,20 +215,38 @@ function Front({ extras }: { extras: Extra[] }) {
 
 const ATTR_FILL: Record<QuestAttr, string> = {
   staerke: '#ff6b5b',
-  ausdauer: '#4fd1c5',
-  beweglichkeit: '#b794f6',
+  ausdauer: '#3fc9bd',
+  beweglichkeit: '#a985f2',
 };
 
+/**
+ * Clay look: a radial gradient lit from the top left, a soft shade at the bottom,
+ * a blurred highlight and a contact shadow on the floor.
+ */
 export function Monster({ enemyId, attr, className }: { enemyId: string; attr: QuestAttr; className?: string }) {
   const spec = SPECS[enemyId] ?? SPECS['ausreden-geist'];
-  const fill = ATTR_FILL[attr];
+  const base = ATTR_FILL[attr];
+  const id = useId().replace(/:/g, '');
+  const paint = `url(#b${id})`;
   return (
-    <svg className={className} viewBox="0 0 100 100" aria-hidden style={{ color: fill }}>
-      <ellipse cx="50" cy="93" rx="30" ry="5" fill={INK} opacity="0.5" />
-      <Behind extras={spec.extras} fill={fill} />
-      {BODIES[spec.body](fill)}
-      {/* soft highlight gives the flat shape some volume */}
-      <ellipse cx="38" cy="34" rx="14" ry="8" fill="#fff" opacity="0.18" transform="rotate(-20 38 34)" />
+    <svg className={className} viewBox="0 0 100 100" aria-hidden style={{ color: mix(base, '#0b0a24', 0.25) }}>
+      <defs>
+        <radialGradient id={`b${id}`} cx="0.36" cy="0.3" r="0.8">
+          <stop offset="0" stopColor={mix(base, '#ffffff', 0.42)} />
+          <stop offset="0.45" stopColor={base} />
+          <stop offset="1" stopColor={mix(base, '#0b0a24', 0.45)} />
+        </radialGradient>
+        <filter id={`s${id}`} x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.2" />
+        </filter>
+        <filter id={`h${id}`} x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="1.6" />
+        </filter>
+      </defs>
+      <ellipse cx="50" cy="92" rx="30" ry="5.5" fill="#05041a" opacity="0.55" filter={`url(#s${id})`} />
+      <Behind extras={spec.extras} fill={paint} />
+      {BODIES[spec.body](paint)}
+      <ellipse cx="37" cy="31" rx="13" ry="7" fill="#fff" opacity="0.38" transform="rotate(-22 37 31)" filter={`url(#h${id})`} />
       <Eyes type={spec.eyes} />
       <Mouth type={spec.mouth} />
       <Front extras={spec.extras} />

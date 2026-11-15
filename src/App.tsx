@@ -105,7 +105,7 @@ export default function App() {
         ))}
       </nav>
 
-      {toasts.length > 0 && levelUp === null && victory === null && <Toast key={toasts[0].id} icon={toasts[0].icon} title={toasts[0].title} onDone={dropToast} />}
+      {toasts.length > 0 && levelUp === null && victory === null && <Toast key={toasts[0].id} icon={toasts[0].icon} tier={toasts[0].tier} title={toasts[0].title} onDone={dropToast} />}
       {victory !== null && levelUp === null && <Victory battle={victory} onClose={() => setVictory(null)} />}
       {levelUp !== null && <LevelUp level={levelUp} onClose={() => setLevelUp(null)} />}
     </div>

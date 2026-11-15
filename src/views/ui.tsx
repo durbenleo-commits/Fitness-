@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { Battle } from '../battle';
+import { Badge3D, type IconName } from './Icons';
 import { Monster } from './Monster';
 import { ATTR_LABEL, BOSS_ATTR_POINTS, DEFAULT_EQUIPMENT, ENEMY_ATTR_POINTS, EQUIPMENT, rankFor, type Equipment } from '../game';
 
@@ -27,7 +28,9 @@ export function LevelUp({ level, onClose }: { level: number; onClose: () => void
         <span id="lvlup-title" className="display lvlup-title">
           Level up
         </span>
-        <span className="display lvlup-num">{level}</span>
+        <span className="lvlup-hex">
+          <span className="display lvlup-num">{level}</span>
+        </span>
         <p>{rankChanged ? `Neuer Rang: ${rankFor(level)}. ` : ''}Deine Quests werden ab morgen etwas schwerer.</p>
         <button className="primary" onClick={onClose} autoFocus>
           Weiter
@@ -37,16 +40,14 @@ export function LevelUp({ level, onClose }: { level: number; onClose: () => void
   );
 }
 
-export function Toast({ icon, title, onDone }: { icon: string; title: string; onDone: () => void }) {
+export function Toast({ icon, tier, title, onDone }: { icon: IconName; tier: 'bronze' | 'silver' | 'gold'; title: string; onDone: () => void }) {
   useEffect(() => {
     const t = window.setTimeout(onDone, 3500);
     return () => window.clearTimeout(t);
   }, [onDone, title]);
   return (
     <div className="toast" role="status" onClick={onDone}>
-      <span className="toast-icon" aria-hidden>
-        {icon}
-      </span>
+      <Badge3D icon={icon} tone={tier} shape="coin" size={46} />
       <span>
         <span className="toast-label">Erfolg freigeschaltet</span>
         <strong>{title}</strong>
@@ -89,7 +90,7 @@ export function EquipmentPicker(props: {
       <div className="gear" role="group" aria-label="Ausrüstung und Möglichkeiten">
         {EQUIPMENT.map((e) => (
           <button type="button" key={e.id} aria-pressed={list.includes(e.id)} onClick={() => toggle(e.id)}>
-            <span aria-hidden>{e.icon}</span>
+            <Badge3D icon={e.icon} tone={list.includes(e.id) ? 'gold' : 'neutral'} size={30} />
             {e.label}
           </button>
         ))}
