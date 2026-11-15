@@ -47,7 +47,7 @@ Kostenloses Hosting über GitHub Pages gibt es nur für **öffentliche** Reposit
 
 1. Repository auf öffentlich stellen: **Settings → General → Danger Zone → Change visibility → Public**.
 2. **Settings → Pages → Source: GitHub Actions** wählen.
-3. Bei jedem Push auf `main` baut GitHub die App neu. Sie ist dann unter `https://durbenleo-commits.github.io/Fitness-/` erreichbar.
+3. Unter **Actions → Deploy to GitHub Pages → Run workflow** einmal starten (der Ablauf läuft absichtlich nur manuell). Sie ist dann unter `https://durbenleo-commits.github.io/Fitness-/` erreichbar.
 
 ## Wichtig zu wissen
 
