@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { DIFFICULTY_LABEL, toDateKey, type Difficulty, type Profile } from '../game';
-import { Segmented } from './ui';
+import { DEFAULT_EQUIPMENT, DIFFICULTY_LABEL, toDateKey, type Difficulty, type Equipment, type Profile } from '../game';
+import { EquipmentPicker, Segmented } from './ui';
 
 export function Onboarding({ onStart }: { onStart: (p: Profile) => void }) {
   const [name, setName] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>(1);
   const [seasonDays, setSeasonDays] = useState(66);
+  const [equipment, setEquipment] = useState<Equipment[]>(DEFAULT_EQUIPMENT);
+  const [noJumping, setNoJumping] = useState(false);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    onStart({ name: name.trim() || 'Held', difficulty, seasonDays, startDate: toDateKey(new Date()) });
+    onStart({ name: name.trim() || 'Held', difficulty, seasonDays, startDate: toDateKey(new Date()), equipment, noJumping });
   };
 
   return (
@@ -36,6 +38,18 @@ export function Onboarding({ onStart }: { onStart: (p: Profile) => void }) {
       <fieldset className="field">
         <legend>Wie lang soll deine Saison dauern?</legend>
         <Segmented options={SEASON_OPTIONS} value={seasonDays} onChange={setSeasonDays} />
+      </fieldset>
+
+      <fieldset className="field">
+        <legend>Was hast du zur Verfügung?</legend>
+        <EquipmentPicker
+          equipment={equipment}
+          noJumping={noJumping}
+          onChange={(eq, nj) => {
+            setEquipment(eq);
+            setNoJumping(nj);
+          }}
+        />
       </fieldset>
 
       <button className="primary" type="submit">

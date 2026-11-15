@@ -682,3 +682,24 @@ select:focus { border-color: var(--signal); outline: none; }
 .victory-enemy { font-size: 6rem; line-height: 1.1; animation: stamp 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
 
 .tabs button { font-size: 0.8rem; }
+
+/* ---------- Equipment ---------- */
+
+.gear { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+.gear button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--pitch);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-align: left;
+  line-height: 1.2;
+}
+.gear button span { font-size: 1.3rem; flex: none; }
+.gear button[aria-pressed='true'] { border-color: var(--signal); background: var(--pitch-hi); color: var(--signal); }
+.gear + .check { margin-top: 0.6rem; }
+.switch:disabled { opacity: 0.4; cursor: default; }

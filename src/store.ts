@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ensureBattles, logDamage, settleBattles, undoDamage } from './battle';
+import { ensureBattles, logDamage, settleBattles, undoDamage, type Battle } from './battle';
 import {
   autoCompleteFromHealth,
   dailyQuests,
@@ -206,6 +206,23 @@ export function useGame(today: string) {
     }));
   }, []);
 
+  /** Rebuild today's quests and untouched fights with the current settings. */
+  const applyToToday = useCallback(() => {
+    setState((s) => {
+      if (!s.profile) return s;
+      const level = currentLevel(s);
+      let next = s;
+      const day = s.days[today];
+      if (day && !day.quests.some((q) => q.done)) {
+        const fresh = generateDay(today, level, s.profile.difficulty, randomPool(s), dailyQuests(s));
+        next = { ...next, days: { ...next.days, [today]: fresh } };
+      }
+      const untouched = (b: Battle) => b.end >= today && !b.defeatedOn && b.phases.every((p) => p.log.length === 0);
+      next = { ...next, battles: next.battles.filter((b) => !untouched(b)) };
+      return ensureBattles(next, today, level);
+    });
+  }, [today]);
+
   const newSeason = useCallback(
     (length: number) => setState((s) => startNewSeason(s, today, length)),
     [today],
@@ -227,6 +244,7 @@ export function useGame(today: string) {
     removeCustomQuest,
     setQuestEnabled,
     newSeason,
+    applyToToday,
     replaceState,
     resetAll,
   };

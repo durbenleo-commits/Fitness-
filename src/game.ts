@@ -32,6 +32,53 @@ export interface QuestTemplate {
   custom?: boolean; // made by the player; amount never scales
   daily?: boolean; // custom only: appears every day as an extra quest
   noLevelScale?: boolean; // grows with difficulty only, not with level
+  requires?: Equipment[]; // needs at least one of these
+  jump?: boolean; // involves jumping (left out with "no jumping")
+}
+
+export type Equipment =
+  | 'outdoor'
+  | 'stairs'
+  | 'treadmill'
+  | 'dumbbells'
+  | 'kettlebell'
+  | 'bar'
+  | 'band'
+  | 'rope'
+  | 'bike'
+  | 'pool'
+  | 'gym';
+
+export const EQUIPMENT: { id: Equipment; label: string; icon: string }[] = [
+  { id: 'outdoor', label: 'Draußen laufen und gehen', icon: '🌳' },
+  { id: 'stairs', label: 'Treppen', icon: '🪜' },
+  { id: 'dumbbells', label: 'Kurzhanteln', icon: '🏋️' },
+  { id: 'kettlebell', label: 'Kettlebell', icon: '🔔' },
+  { id: 'bar', label: 'Klimmzugstange', icon: '🔩' },
+  { id: 'band', label: 'Widerstandsband', icon: '🎗️' },
+  { id: 'rope', label: 'Springseil', icon: '🪢' },
+  { id: 'bike', label: 'Fahrrad oder Heimtrainer', icon: '🚴' },
+  { id: 'treadmill', label: 'Laufband', icon: '🏃' },
+  { id: 'pool', label: 'Schwimmbad', icon: '🏊' },
+  { id: 'gym', label: 'Fitnessstudio', icon: '🏢' },
+];
+
+/** A gym has all the smaller gear too. */
+const GYM_INCLUDES: Equipment[] = ['dumbbells', 'kettlebell', 'bar', 'band', 'rope', 'bike', 'treadmill'];
+export const DEFAULT_EQUIPMENT: Equipment[] = ['outdoor', 'stairs'];
+
+export function hasEquipment(profile: Profile | null | undefined, eq: Equipment): boolean {
+  const list = profile?.equipment ?? DEFAULT_EQUIPMENT;
+  return list.includes(eq) || (list.includes('gym') && GYM_INCLUDES.includes(eq));
+}
+
+/** Why a built-in exercise is not possible right now, or null if it is. */
+export function unavailableReason(t: QuestTemplate, profile: Profile | null | undefined): string | null {
+  if (t.jump && profile?.noJumping) return 'Sprungübung';
+  if (t.requires && !t.requires.some((eq) => hasEquipment(profile, eq))) {
+    return 'Braucht ' + t.requires.map((eq) => EQUIPMENT.find((e) => e.id === eq)!.label).join(' oder ');
+  }
+  return null;
 }
 
 export const QUEST_POOL: QuestTemplate[] = [
@@ -41,15 +88,27 @@ export const QUEST_POOL: QuestTemplate[] = [
   { id: 'situps', title: 'Crunches', icon: '🔥', attr: 'staerke', base: 20, step: 1, unit: 'Wdh.', xp: 25 },
   { id: 'wallsit', title: 'Wandsitzen', icon: '🧱', attr: 'staerke', base: 40, step: 5, unit: 'Sek.', xp: 25 },
   { id: 'plank', title: 'Unterarmstütz', icon: '🪵', attr: 'ausdauer', base: 40, step: 5, unit: 'Sek.', xp: 30 },
-  { id: 'run', title: 'Laufen', icon: '🏃', attr: 'ausdauer', base: 2, step: 0.5, unit: 'km', xp: 45 },
-  { id: 'walk', title: 'Spaziergang', icon: '👟', attr: 'ausdauer', base: 20, step: 5, unit: 'Min.', xp: 25 },
-  { id: 'jacks', title: 'Hampelmänner', icon: '⭐', attr: 'ausdauer', base: 40, step: 5, unit: 'Wdh.', xp: 25 },
-  { id: 'burpees', title: 'Burpees', icon: '⚡', attr: 'ausdauer', base: 8, step: 1, unit: 'Wdh.', xp: 40 },
+  { id: 'run', title: 'Laufen', icon: '🏃', attr: 'ausdauer', base: 2, step: 0.5, unit: 'km', xp: 45, requires: ['outdoor', 'treadmill'] },
+  { id: 'walk', title: 'Spaziergang', icon: '👟', attr: 'ausdauer', base: 20, step: 5, unit: 'Min.', xp: 25, requires: ['outdoor', 'treadmill'] },
+  { id: 'jacks', title: 'Hampelmänner', icon: '⭐', attr: 'ausdauer', base: 40, step: 5, unit: 'Wdh.', xp: 25, jump: true },
+  { id: 'burpees', title: 'Burpees', icon: '⚡', attr: 'ausdauer', base: 8, step: 1, unit: 'Wdh.', xp: 40, jump: true },
+  { id: 'mountain', title: 'Bergsteiger', icon: '⛰️', attr: 'ausdauer', base: 30, step: 5, unit: 'Wdh.', xp: 30 },
   { id: 'steps', title: 'Schritte', icon: '👣', attr: 'ausdauer', base: 6000, step: 500, unit: 'Schritte', xp: 30, noLevelScale: true },
-  { id: 'stairs', title: 'Treppen steigen', icon: '🪜', attr: 'ausdauer', base: 6, step: 1, unit: 'Stockwerke', xp: 30 },
+  { id: 'stairs', title: 'Treppen steigen', icon: '🪜', attr: 'ausdauer', base: 6, step: 1, unit: 'Stockwerke', xp: 30, requires: ['stairs'] },
   { id: 'stretch', title: 'Dehnen', icon: '🧘', attr: 'beweglichkeit', base: 8, step: 1, unit: 'Min.', xp: 25 },
   { id: 'mobility', title: 'Mobility-Routine', icon: '🌀', attr: 'beweglichkeit', base: 10, step: 1, unit: 'Min.', xp: 30 },
   { id: 'hips', title: 'Hüftöffner', icon: '🦋', attr: 'beweglichkeit', base: 5, step: 1, unit: 'Min.', xp: 20 },
+  // With equipment
+  { id: 'pullups', title: 'Klimmzüge', icon: '🧗', attr: 'staerke', base: 4, step: 1, unit: 'Wdh.', xp: 40, requires: ['bar'] },
+  { id: 'curls', title: 'Bizeps-Curls', icon: '🏋️', attr: 'staerke', base: 12, step: 1, unit: 'pro Arm', xp: 30, requires: ['dumbbells'] },
+  { id: 'press', title: 'Schulterdrücken', icon: '🙌', attr: 'staerke', base: 12, step: 1, unit: 'Wdh.', xp: 30, requires: ['dumbbells', 'kettlebell'] },
+  { id: 'rows', title: 'Rudern mit Band', icon: '🎗️', attr: 'staerke', base: 15, step: 1, unit: 'Wdh.', xp: 25, requires: ['band'] },
+  { id: 'swings', title: 'Kettlebell-Swings', icon: '🔔', attr: 'ausdauer', base: 20, step: 1, unit: 'Wdh.', xp: 35, requires: ['kettlebell'] },
+  { id: 'rope', title: 'Seilspringen', icon: '🪢', attr: 'ausdauer', base: 3, step: 1, unit: 'Min.', xp: 30, requires: ['rope'], jump: true },
+  { id: 'bike', title: 'Radfahren', icon: '🚴', attr: 'ausdauer', base: 20, step: 5, unit: 'Min.', xp: 35, requires: ['bike'] },
+  { id: 'swim', title: 'Schwimmen', icon: '🏊', attr: 'ausdauer', base: 20, step: 5, unit: 'Min.', xp: 45, requires: ['pool'] },
+  { id: 'gym', title: 'Gerätetraining', icon: '🏢', attr: 'staerke', base: 30, step: 5, unit: 'Min.', xp: 50, requires: ['gym'], noLevelScale: true },
+  { id: 'bandstretch', title: 'Dehnen mit Band', icon: '🧘', attr: 'beweglichkeit', base: 8, step: 1, unit: 'Min.', xp: 25, requires: ['band'] },
 ];
 
 export const CUSTOM_QUEST_XP = 30;
@@ -79,6 +138,8 @@ export interface Profile {
   difficulty: Difficulty;
   seasonDays: number;
   startDate: string;
+  equipment?: Equipment[]; // missing in old saves: DEFAULT_EQUIPMENT
+  noJumping?: boolean;
 }
 
 export interface SeasonRecord {
@@ -181,13 +242,16 @@ export function rankFor(level: number): string {
 // ---------- quest pool ----------
 
 /** Templates that may be drawn at random: enabled built-ins plus non-daily custom quests. */
-export function randomPool(state: Pick<GameState, 'customQuests' | 'disabledQuests'>): QuestTemplate[] {
-  const pool = [
-    ...QUEST_POOL.filter((q) => !state.disabledQuests.includes(q.id)),
-    ...state.customQuests.filter((q) => !q.daily),
-  ];
-  return pool.length > 0 ? pool : QUEST_POOL;
+export function randomPool(
+  state: Pick<GameState, 'customQuests' | 'disabledQuests'> & { profile?: Profile | null },
+): QuestTemplate[] {
+  const possible = QUEST_POOL.filter((q) => !unavailableReason(q, state.profile));
+  const pool = [...possible.filter((q) => !state.disabledQuests.includes(q.id)), ...state.customQuests.filter((q) => !q.daily)];
+  return pool.length > 0 ? pool : possible;
 }
+
+/** Built-in exercises that are possible and switched on: what enemies may ask for. */
+export const battlePool = (state: GameState) => randomPool(state).filter((q) => !q.custom);
 
 export const dailyQuests = (state: Pick<GameState, 'customQuests'>) => state.customQuests.filter((q) => q.daily);
 

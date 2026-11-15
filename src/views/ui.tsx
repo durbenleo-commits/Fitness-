@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { Battle } from '../battle';
-import { ATTR_LABEL, BOSS_ATTR_POINTS, ENEMY_ATTR_POINTS, rankFor } from '../game';
+import { ATTR_LABEL, BOSS_ATTR_POINTS, DEFAULT_EQUIPMENT, ENEMY_ATTR_POINTS, EQUIPMENT, rankFor, type Equipment } from '../game';
 
 export function Segmented<T extends string | number>(props: {
   options: { value: T; label: string }[];
@@ -72,5 +72,36 @@ export function Victory({ battle: b, onClose }: { battle: Battle; onClose: () =>
         </button>
       </div>
     </div>
+  );
+}
+
+/** Multi-select of the gear and places someone has, plus the no-jumping switch. */
+export function EquipmentPicker(props: {
+  equipment: Equipment[] | undefined;
+  noJumping: boolean | undefined;
+  onChange: (equipment: Equipment[], noJumping: boolean) => void;
+}) {
+  const list = props.equipment ?? DEFAULT_EQUIPMENT;
+  const quiet = !!props.noJumping;
+  const toggle = (id: Equipment) =>
+    props.onChange(list.includes(id) ? list.filter((x) => x !== id) : [...list, id], quiet);
+  return (
+    <>
+      <div className="gear" role="group" aria-label="Ausrüstung und Möglichkeiten">
+        {EQUIPMENT.map((e) => (
+          <button type="button" key={e.id} aria-pressed={list.includes(e.id)} onClick={() => toggle(e.id)}>
+            <span aria-hidden>{e.icon}</span>
+            {e.label}
+          </button>
+        ))}
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={quiet} onChange={(e) => props.onChange(list, e.target.checked)} />
+        <span>
+          Keine Sprungübungen
+          <small>Zum Beispiel wegen Nachbarn unter dir oder wegen der Knie. Lässt Burpees, Hampelmänner und Seilspringen weg.</small>
+        </span>
+      </label>
+    </>
   );
 }

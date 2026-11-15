@@ -8,11 +8,13 @@ import {
   QUEST_POOL,
   isGameState,
   makeCustomQuest,
+  toDateKey,
+  unavailableReason,
   type Difficulty,
   type QuestAttr,
 } from '../game';
 import type { Game } from '../store';
-import { Segmented } from './ui';
+import { EquipmentPicker, Segmented } from './ui';
 
 export function SettingsView({ game }: { game: Game }) {
   const { state } = game;
@@ -61,6 +63,8 @@ export function SettingsView({ game }: { game: Game }) {
         />
         <small>Gilt ab den Quests von morgen.</small>
       </fieldset>
+
+      <GearSection game={game} />
 
       <HealthSection game={game} />
 
@@ -148,7 +152,7 @@ function CustomQuests({ game }: { game: Game }) {
     <div className="field">
       <span>Eigene Quests</span>
       {state.customQuests.length === 0 ? (
-        <p className="small-text">Du hast noch keine eigenen Quests. Leg Übungen an, die dir fehlen, z. B. Klimmzüge oder Radfahren.</p>
+        <p className="small-text">Du hast noch keine eigenen Quests. Leg Übungen an, die dir fehlen, z. B. Fußball, Tanzen oder Klettern.</p>
       ) : (
         <ul className="quest-list">
           {state.customQuests.map((q) => (
@@ -253,19 +257,21 @@ function BuiltInQuests({ game }: { game: Game }) {
       <p className="small-text">Schalte Übungen aus, die du nicht machen kannst oder willst. Gilt ab morgen.</p>
       <ul className="quest-list">
         {QUEST_POOL.map((q) => {
-          const enabled = !state.disabledQuests.includes(q.id);
+          const reason = unavailableReason(q, state.profile);
+          const enabled = !reason && !state.disabledQuests.includes(q.id);
           return (
             <li key={q.id} className={`attr-${q.attr} ${enabled ? '' : 'off'}`}>
               <span aria-hidden>{q.icon}</span>
               <label className="ql-text switch-label" htmlFor={`q-${q.id}`}>
                 <strong>{q.title}</strong>
-                <span>{ATTR_LABEL[q.attr]}</span>
+                <span>{reason ?? ATTR_LABEL[q.attr]}</span>
               </label>
               <input
                 id={`q-${q.id}`}
                 type="checkbox"
                 role="switch"
                 className="switch"
+                disabled={!!reason}
                 checked={enabled}
                 onChange={(e) => game.setQuestEnabled(q.id, e.target.checked)}
               />
@@ -328,5 +334,41 @@ function HealthSection({ game }: { game: Game }) {
         </p>
       )}
     </div>
+  );
+}
+
+function GearSection({ game }: { game: Game }) {
+  const profile = game.state.profile!;
+  const [applied, setApplied] = useState(false);
+  const nothingDoneToday = !game.state.days[toDateKey(new Date())]?.quests.some((q) => q.done);
+  return (
+    <fieldset className="field">
+      <legend>Ausrüstung und Möglichkeiten</legend>
+      <p className="small-text">
+        Quests, Gegner und Bosse nehmen nur Übungen, die du damit machen kannst. Ohne Ausrüstung bekommst du Übungen mit dem eigenen
+        Körpergewicht.
+      </p>
+      <EquipmentPicker
+        equipment={profile.equipment}
+        noJumping={profile.noJumping}
+        onChange={(equipment, noJumping) => {
+          game.updateProfile({ equipment, noJumping });
+          setApplied(false);
+        }}
+      />
+      <small>Gilt ab morgen.</small>
+      {nothingDoneToday && (
+        <button
+          className="secondary"
+          onClick={() => {
+            game.applyToToday();
+            setApplied(true);
+          }}
+          disabled={applied}
+        >
+          {applied ? 'Heute ist angepasst' : 'Schon heute anwenden'}
+        </button>
+      )}
+    </fieldset>
   );
 }

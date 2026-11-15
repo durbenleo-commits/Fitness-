@@ -48,8 +48,10 @@ describe('custom and disabled quests', () => {
     expect(day.quests.some((q) => q.attr === 'beweglichkeit')).toBe(false);
   });
 
-  it('falls back to the full pool when everything is disabled', () => {
-    expect(randomPool({ customQuests: [], disabledQuests: QUEST_POOL.map((q) => q.id) })).toBe(QUEST_POOL);
+  it('falls back to all possible exercises when everything is disabled', () => {
+    const pool = randomPool({ customQuests: [], disabledQuests: QUEST_POOL.map((q) => q.id) });
+    expect(pool.length).toBeGreaterThan(0);
+    expect(pool.some((q) => q.id === 'pullups')).toBe(false);
   });
 
   it('rerolls within the given pool only', () => {

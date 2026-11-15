@@ -2,11 +2,13 @@
 import {
   QUEST_POOL,
   addDays,
+  battlePool,
   daysBetween,
   scaleFactor,
   type Difficulty,
   type GameState,
   type QuestAttr,
+  type QuestTemplate,
 } from './game';
 
 export type MoveKind = 'exercise' | 'steps' | 'run';
@@ -112,6 +114,24 @@ const DIFF_ONLY: Record<Difficulty, number> = { 1: 0.6, 2: 1, 3: 1.5 };
 
 const roundTo = (v: number, step: number) => Math.max(step, Number((Math.round(v / step) * step).toFixed(1)));
 
+/**
+ * Swap moves the player cannot do (missing equipment, switched off) for a possible
+ * exercise of the same attribute, keeping the same relative effort.
+ */
+function adaptMove(move: MoveSpec, attr: QuestAttr, pool: QuestTemplate[], rand: () => number): MoveSpec {
+  if (move.kind === 'steps') return move;
+  const wanted = move.kind === 'run' ? 'run' : move.exerciseId!;
+  if (pool.some((q) => q.id === wanted)) return move;
+  const original = QUEST_POOL.find((q) => q.id === wanted)!;
+  let options = pool.filter((q) => q.attr === original.attr && !q.custom);
+  if (options.length === 0) options = pool.filter((q) => q.attr === attr && !q.custom);
+  if (options.length === 0) options = pool.filter((q) => !q.custom);
+  if (options.length === 0) return move;
+  const t = options[Math.floor(rand() * options.length)];
+  if (t.id === 'run') return { kind: 'run', base: (move.base / original.base) * t.base };
+  return { kind: 'exercise', exerciseId: t.id, base: (move.base / original.base) * t.base };
+}
+
 function makePhase(move: MoveSpec, level: number, difficulty: Difficulty, factor: number, idx: number): BattlePhase {
   if (move.kind === 'steps') {
     // Steps and distance scale with difficulty only: level-based growth would get unrealistic.
@@ -134,7 +154,7 @@ function makePhase(move: MoveSpec, level: number, difficulty: Difficulty, factor
 }
 
 /** Today's everyday enemy. Roughly one in five is an elite with more HP and more XP. */
-export function generateEnemy(date: string, level: number, difficulty: Difficulty): Battle {
+export function generateEnemy(date: string, level: number, difficulty: Difficulty, pool: QuestTemplate[] = QUEST_POOL): Battle {
   const rand = mulberry32(hash('enemy' + date));
   const e = ENEMIES[Math.floor(rand() * ENEMIES.length)];
   const elite = rand() < 0.2;
@@ -151,7 +171,7 @@ export function generateEnemy(date: string, level: number, difficulty: Difficult
     start: date,
     end: date,
     xp: Math.round((40 + 4 * level) * (elite ? 1.6 : 1)),
-    phases: e.moves.map((m, i) => makePhase(m, level, difficulty, factor, i)),
+    phases: e.moves.map((m, i) => makePhase(adaptMove(m, e.attr, pool, rand), level, difficulty, factor, i)),
   };
 }
 
@@ -167,7 +187,7 @@ export function bossAvailable(date: string): boolean {
   return daysBetween(date, addDays(weekStart(date), 6)) >= 3;
 }
 
-export function generateBoss(date: string, level: number, difficulty: Difficulty): Battle {
+export function generateBoss(date: string, level: number, difficulty: Difficulty, pool: QuestTemplate[] = QUEST_POOL): Battle {
   const start = weekStart(date);
   const rand = mulberry32(hash('boss' + start));
   const b = BOSSES[Math.floor(rand() * BOSSES.length)];
@@ -183,8 +203,19 @@ export function generateBoss(date: string, level: number, difficulty: Difficulty
     start: date,
     end: addDays(start, 6),
     xp: 200 + 15 * level,
-    phases: b.moves.map((m, i) => makePhase(m, level, difficulty, 1, i)),
+    phases: dedupe(b.moves.map((m) => adaptMove(m, b.attr, pool, rand))).map((m, i) => makePhase(m, level, difficulty, 1, i)),
   };
+}
+
+/** Two phases with the same exercise (after swapping) merge into one bigger phase. */
+function dedupe(moves: MoveSpec[]): MoveSpec[] {
+  const out: MoveSpec[] = [];
+  for (const m of moves) {
+    const same = out.find((o) => o.kind === m.kind && o.exerciseId === m.exerciseId);
+    if (same) same.base += m.base;
+    else out.push({ ...m });
+  }
+  return out;
 }
 
 // ---------- progress ----------
@@ -261,9 +292,10 @@ export function ensureBattles(state: GameState, today: string, level: number): G
   if (!state.profile) return state;
   const add: Battle[] = [];
   const has = (id: string) => state.battles.some((b) => b.id === id);
-  const enemy = generateEnemy(today, level, state.profile.difficulty);
+  const pool = battlePool(state);
+  const enemy = generateEnemy(today, level, state.profile.difficulty, pool);
   if (!has(enemy.id)) add.push(enemy);
-  if (bossAvailable(today) && !has(`boss-${weekStart(today)}`)) add.push(generateBoss(today, level, state.profile.difficulty));
+  if (bossAvailable(today) && !has(`boss-${weekStart(today)}`)) add.push(generateBoss(today, level, state.profile.difficulty, pool));
   return add.length ? { ...state, battles: [...state.battles, ...add] } : state;
 }
 
