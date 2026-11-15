@@ -55,6 +55,10 @@ Kostenloses Hosting über GitHub Pages gibt es nur für **öffentliche** Reposit
 - Der Fortschritt liegt **nur auf deinem Handy** (im Browser-Speicher). Wenn du die Browserdaten löschst, ist er weg. Speichere in den Einstellungen regelmäßig ein Backup.
 - Die App prüft nicht, ob du die Übungen wirklich gemacht hast.
 
+## Weiterarbeiten am Handy und PC
+
+Alles, was Claude über das Projekt wissen muss, steht in `CLAUDE.md`. Am Handy: Claude-App → Code → dieses Repo. Am PC: claude.ai/code oder lokal klonen (siehe unten).
+
 ## Entwicklung
 
 ```bash
