@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { Battle } from '../battle';
+import { Monster } from './Monster';
 import { ATTR_LABEL, BOSS_ATTR_POINTS, DEFAULT_EQUIPMENT, ENEMY_ATTR_POINTS, EQUIPMENT, rankFor, type Equipment } from '../game';
 
 export function Segmented<T extends string | number>(props: {
@@ -61,9 +62,7 @@ export function Victory({ battle: b, onClose }: { battle: Battle; onClose: () =>
         <span id="victory-title" className="display lvlup-title">
           {b.boss ? 'Boss besiegt' : 'Sieg'}
         </span>
-        <span className="victory-enemy" aria-hidden>
-          {b.icon}
-        </span>
+        <Monster enemyId={b.enemyId} attr={b.attr} className="victory-enemy" />
         <p>
           <strong>{b.name}</strong> ist erledigt. Du bekommst {b.xp} XP und {b.boss ? BOSS_ATTR_POINTS : ENEMY_ATTR_POINTS} Punkte {ATTR_LABEL[b.attr]}.
         </p>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { hpLeft } from '../battle';
 import {
   ATTR_LABEL,
   DAY_CLEAR_BONUS,
@@ -16,6 +17,8 @@ import {
   type QuestInstance,
 } from '../game';
 import type { Game } from '../store';
+import { AttrTile, Icon } from './Icons';
+import { Monster } from './Monster';
 import { SEASON_OPTIONS } from './Onboarding';
 import { Segmented } from './ui';
 
@@ -34,34 +37,37 @@ export function Hud(props: { profile: Profile; level: number; intoLevel: number;
         </div>
         <div className="hud-who">
           <strong className="hud-name">{profile.name}</strong>
-          <span className="hud-rank">{rankFor(level)}</span>
+          <span className="hud-rank">
+            {rankFor(level)} · {over ? 'Saison beendet' : `Tag ${day} von ${profile.seasonDays}`}
+          </span>
         </div>
         <div className={`streak ${streak > 0 ? 'on' : ''}`} aria-label={`${streak} Tage Serie`}>
-          <span aria-hidden>🔥</span>
+          <Icon name="flame" size={22} />
           <span className="display">{streak}</span>
         </div>
       </div>
 
-      <div className="xpbar" role="progressbar" aria-valuemin={0} aria-valuemax={needed} aria-valuenow={intoLevel} aria-label="Erfahrung bis zum nächsten Level">
-        <div className="xpbar-fill" style={{ width: `${pct}%` }} />
-      </div>
-      <div className="hud-meta">
-        <span>
-          {intoLevel} / {needed} XP
+      <div className="xp-row">
+        <div className="xpbar" role="progressbar" aria-valuemin={0} aria-valuemax={needed} aria-valuenow={intoLevel} aria-label="Erfahrung bis zum nächsten Level">
+          <div className="xpbar-fill" style={{ width: `${pct}%` }} />
+        </div>
+        <span className="xp-text">
+          {intoLevel}/{needed} XP
         </span>
-        <span>{over ? 'Saison beendet' : `Tag ${day} von ${profile.seasonDays}`}</span>
       </div>
     </header>
   );
 }
 
-export function TodayView({ game, today }: { game: Game; today: string }) {
+export function TodayView({ game, today, onOpenArena }: { game: Game; today: string; onOpenArena: () => void }) {
   const { state } = game;
+  const [swapping, setSwapping] = useState(false);
   const day = state.days[today];
   if (!day || !state.profile) return null;
   const done = day.quests.filter((q) => q.done).length;
   const cleared = isCleared(day);
   const canReroll = day.rerollsUsed < REROLLS_PER_DAY;
+  const enemy = state.battles.find((b) => b.id === `enemy-${today}`);
 
   return (
     <section>
@@ -74,29 +80,79 @@ export function TodayView({ game, today }: { game: Game; today: string }) {
         </span>
       </div>
 
-      <ul className="quests">
+      <div className={`day-track ${cleared ? 'full' : ''}`} aria-hidden>
         {day.quests.map((q) => (
-          <QuestRow
-            key={q.id}
-            quest={q}
-            canReroll={canReroll && !isDailyInstance(state, q)}
-            tracked={state.health.connected && isTrackedQuest(q.templateId) ? healthValue(state, today, q.templateId) : null}
-            onToggle={game.toggleQuest}
-            onReroll={game.reroll}
-          />
+          <span key={q.id} className={`seg attr-${q.attr} ${q.done ? 'on' : ''}`} />
         ))}
+        <span className="day-bonus">
+          <Icon name="star" size={18} />+{DAY_CLEAR_BONUS}
+        </span>
+      </div>
+
+      <ul className={`quests ${swapping ? 'swapping' : ''}`}>
+        {day.quests.map((q) => {
+          const swappable = !q.done && !isDailyInstance(state, q);
+          return (
+            <QuestRow
+              key={q.id}
+              quest={q}
+              swapMode={swapping}
+              swappable={swappable}
+              tracked={state.health.connected && isTrackedQuest(q.templateId) ? healthValue(state, today, q.templateId) : null}
+              onTap={() => {
+                if (swapping) {
+                  if (!swappable) return;
+                  game.reroll(q.id);
+                  setSwapping(false);
+                } else game.toggleQuest(q.id);
+              }}
+            />
+          );
+        })}
       </ul>
 
-      {cleared ? (
-        <p className="cleared">
-          <span className="display">Tag geschafft</span>
-          <span>+{DAY_CLEAR_BONUS} Bonus-XP und +1 Disziplin. Morgen gibt es neue Quests.</span>
-        </p>
-      ) : (
-        <p className="hint">
-          Tippe eine Quest an, wenn du sie erledigt hast. Schaffst du alle, gibt es {DAY_CLEAR_BONUS} Bonus-XP.
-          {canReroll && ' Eine Quest pro Tag kannst du gegen eine andere tauschen.'}
-        </p>
+      <div className="today-actions">
+        {cleared ? (
+          <p className="cleared">
+            <span className="display">Tag geschafft</span>
+            <span>+{DAY_CLEAR_BONUS} Bonus-XP und +1 Disziplin. Morgen gibt es neue Quests.</span>
+          </p>
+        ) : swapping ? (
+          <p className="hint">
+            Tippe auf die Quest, die du tauschen willst.{' '}
+            <button className="link-button" onClick={() => setSwapping(false)}>
+              Abbrechen
+            </button>
+          </p>
+        ) : (
+          <>
+            <p className="hint">Tippe auf eine Quest, wenn du sie erledigt hast.</p>
+            {canReroll && done < day.quests.length && (
+              <button className="joker" onClick={() => setSwapping(true)}>
+                <Icon name="swap" size={18} />
+                Quest tauschen <span className="joker-count">1 Joker</span>
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {enemy && (
+        <button className={`arena-teaser attr-${enemy.attr} ${enemy.defeatedOn ? 'won' : ''}`} onClick={onOpenArena}>
+          <Monster enemyId={enemy.enemyId} attr={enemy.attr} className="teaser-monster" />
+          <span className="teaser-text">
+            <span className="teaser-label">Heute in der Arena</span>
+            <strong>{enemy.name}</strong>
+            {enemy.defeatedOn ? (
+              <span className="teaser-sub">Besiegt</span>
+            ) : (
+              <span className="teaser-hp">
+                <span style={{ width: `${hpLeft(enemy, state.health.connected ? state.health.days : null) * 100}%` }} />
+              </span>
+            )}
+          </span>
+          <span className="teaser-go">{enemy.defeatedOn ? 'Ansehen' : 'Kämpfen'}</span>
+        </button>
       )}
     </section>
   );
@@ -108,36 +164,28 @@ function healthValue(state: GameState, today: string, templateId: string): numbe
   return templateId === 'steps' ? h.steps : h.runKm;
 }
 
-function QuestRow(props: {
-  quest: QuestInstance;
-  canReroll: boolean;
-  tracked: number | null;
-  onToggle: (id: string) => void;
-  onReroll: (id: string) => void;
-}) {
-  const { quest: q, canReroll, tracked, onToggle, onReroll } = props;
+function QuestRow(props: { quest: QuestInstance; swapMode: boolean; swappable: boolean; tracked: number | null; onTap: () => void }) {
+  const { quest: q, swapMode, swappable, tracked, onTap } = props;
   const [burst, setBurst] = useState(0);
 
-  const toggle = () => {
-    if (!q.done) {
+  const tap = () => {
+    if (!swapMode && !q.done) {
       setBurst((b) => b + 1);
       navigator.vibrate?.(30);
     }
-    onToggle(q.id);
+    onTap();
   };
 
   return (
-    <li className={`quest attr-${q.attr} ${q.done ? 'done' : ''}`}>
-      <button className="quest-main" onClick={toggle} aria-pressed={q.done}>
-        <span className="quest-icon" aria-hidden>
-          {q.icon}
-        </span>
+    <li className={`quest attr-${q.attr} ${q.done ? 'done' : ''} ${swapMode && !swappable ? 'locked' : ''}`}>
+      <button className="quest-main" onClick={tap} aria-pressed={swapMode ? undefined : q.done} disabled={swapMode && !swappable}>
+        <AttrTile attr={q.attr} />
         <span className="quest-text">
           <span className="quest-title">{q.title}</span>
           <span className="quest-attr">
             {tracked !== null && !q.done
               ? `${tracked.toLocaleString('de-DE')} von ${q.amount.toLocaleString('de-DE')}, Samsung Health`
-              : ATTR_LABEL[q.attr]}
+              : `${ATTR_LABEL[q.attr]} · +${q.xp} XP`}
           </span>
         </span>
         <span className="quest-amount">
@@ -145,7 +193,7 @@ function QuestRow(props: {
           <span className="quest-unit">{q.unit}</span>
         </span>
         <span className="quest-check" aria-hidden>
-          {q.done ? '✓' : `+${q.xp}`}
+          {swapMode && swappable ? <Icon name="swap" size={20} /> : q.done ? <Icon name="check" size={22} /> : null}
         </span>
         {burst > 0 && q.done && (
           <span key={burst} className="xp-burst display" aria-hidden>
@@ -153,11 +201,6 @@ function QuestRow(props: {
           </span>
         )}
       </button>
-      {!q.done && canReroll && (
-        <button className="reroll" onClick={() => onReroll(q.id)} aria-label={`${q.title} tauschen`}>
-          Tauschen
-        </button>
-      )}
     </li>
   );
 }

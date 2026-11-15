@@ -8,7 +8,12 @@ import {
   type Battle,
   type BattlePhase,
 } from '../battle';
-import { ATTR_LABEL, BOSS_ATTR_POINTS, ENEMY_ATTR_POINTS, addDays, daysBetween, formatDate } from '../game';
+import { ATTR_LABEL, BOSS_ATTR_POINTS, ENEMY_ATTR_POINTS, QUEST_POOL, addDays, daysBetween, formatDate, type QuestAttr } from '../game';
+import { AttrTile } from './Icons';
+import { Monster } from './Monster';
+
+const phaseAttr = (p: BattlePhase): QuestAttr =>
+  p.kind === 'exercise' ? (QUEST_POOL.find((q) => q.id === p.exerciseId)?.attr ?? 'staerke') : 'ausdauer';
 import type { Game } from '../store';
 
 export function ArenaView({ game, today }: { game: Game; today: string }) {
@@ -50,7 +55,7 @@ export function ArenaView({ game, today }: { game: Game; today: string }) {
               const status = battleStatus(b, today);
               return (
                 <li key={b.id} className={status}>
-                  <span aria-hidden>{b.icon}</span>
+                  <Monster enemyId={b.enemyId} attr={b.attr} className="pb-monster" />
                   <span className="pb-name">
                     {b.name}
                     {b.boss && <span className="tag boss">Boss</span>}
@@ -91,7 +96,7 @@ function BattleCard({ battle: b, game, today }: { battle: Battle; game: Game; to
     <article className={`battle attr-${b.attr} ${b.boss ? 'is-boss' : ''} ${status}`} aria-label={b.name}>
       <header className="battle-head">
         <div key={shake} className={`enemy-portrait ${shake ? 'hit' : ''}`} aria-hidden>
-          <span>{b.icon}</span>
+          <Monster enemyId={b.enemyId} attr={b.attr} className="monster" />
           {hitText && shake > 0 && (
             <span key={shake} className="dmg display">
               {hitText}
@@ -167,11 +172,9 @@ function PhaseRow(props: {
   const fmt = (n: number) => n.toLocaleString('de-DE');
 
   return (
-    <li className={`phase ${done ? 'done' : ''}`}>
+    <li className={`phase attr-${phaseAttr(p)} ${done ? 'done' : ''}`}>
       <div className="phase-top">
-        <span className="phase-icon" aria-hidden>
-          {p.icon}
-        </span>
+        <AttrTile attr={phaseAttr(p)} size="sm" />
         <span className="phase-title">{p.title}</span>
         <span className="phase-count">
           <strong>{fmt(Math.min(progress, p.target))}</strong> / {fmt(p.target)} {p.unit}

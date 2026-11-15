@@ -93,7 +93,7 @@ export function StatsView({ state, today, xp }: { state: GameState; today: strin
             {exercises.map((e) => (
               <tr key={e.templateId} className={`attr-${e.attr}`}>
                 <th scope="row">
-                  <span aria-hidden>{e.icon}</span> {e.title}
+                  {e.title}
                 </th>
                 <td>{e.count}</td>
                 <td>
@@ -162,7 +162,8 @@ function History({ state, today }: { state: GameState; today: string }) {
         </button>
         {exercises.map((e) => (
           <button key={e.templateId} aria-pressed={activeMetric === e.templateId} onClick={() => setMetric(e.templateId)}>
-            {e.icon} {e.title}
+            <span className={`chip-dot attr-${e.attr}`} aria-hidden />
+            {e.title}
           </button>
         ))}
       </div>

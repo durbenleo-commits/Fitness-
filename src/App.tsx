@@ -7,18 +7,19 @@ import { ArenaView } from './views/Arena';
 import { Onboarding } from './views/Onboarding';
 import { SettingsView } from './views/Settings';
 import { StatsView } from './views/Stats';
+import { Icon } from './views/Icons';
 import { Hud, TodayView } from './views/Today';
 import { LevelUp, Toast, Victory } from './views/ui';
 import type { Battle } from './battle';
 
 type Tab = 'heute' | 'arena' | 'werte' | 'erfolge' | 'einstellungen';
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'heute', label: 'Heute', icon: '📋' },
-  { id: 'arena', label: 'Arena', icon: '⚔️' },
-  { id: 'werte', label: 'Werte', icon: '📈' },
-  { id: 'erfolge', label: 'Erfolge', icon: '🏅' },
-  { id: 'einstellungen', label: 'Optionen', icon: '⚙️' },
+const TABS: { id: Tab; label: string; icon: 'today' | 'arena' | 'stats' | 'medal' | 'sliders' }[] = [
+  { id: 'heute', label: 'Heute', icon: 'today' },
+  { id: 'arena', label: 'Arena', icon: 'arena' },
+  { id: 'werte', label: 'Werte', icon: 'stats' },
+  { id: 'erfolge', label: 'Erfolge', icon: 'medal' },
+  { id: 'einstellungen', label: 'Optionen', icon: 'sliders' },
 ];
 
 export default function App() {
@@ -71,7 +72,16 @@ export default function App() {
       />
 
       <main className="content">
-        {tab === 'heute' && <TodayView game={game} today={today} />}
+        {tab === 'heute' && (
+          <TodayView
+            game={game}
+            today={today}
+            onOpenArena={() => {
+              setTab('arena');
+              window.scrollTo(0, 0);
+            }}
+          />
+        )}
         {tab === 'arena' && <ArenaView game={game} today={today} />}
         {tab === 'werte' && <StatsView state={state} today={today} xp={xp} />}
         {tab === 'erfolge' && <AchievementsView list={achievements} />}
@@ -89,7 +99,7 @@ export default function App() {
               window.scrollTo(0, 0);
             }}
           >
-            <span aria-hidden>{t.icon}</span>
+            <Icon name={t.icon} size={22} />
             {t.label}
           </button>
         ))}

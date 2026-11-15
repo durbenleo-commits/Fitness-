@@ -703,3 +703,190 @@ select:focus { border-color: var(--signal); outline: none; }
 .gear button[aria-pressed='true'] { border-color: var(--signal); background: var(--pitch-hi); color: var(--signal); }
 .gear + .check { margin-top: 0.6rem; }
 .switch:disabled { opacity: 0.4; cursor: default; }
+
+/* ======================================================================
+   Design pass 2: icon tiles, drawn monsters, calmer Today screen.
+   Later rules intentionally override the ones above.
+   ====================================================================== */
+
+:root { --flame: #ff8a3d; }
+
+body {
+  background:
+    radial-gradient(120% 50% at 50% -8%, #2d2970 0%, rgba(45, 41, 112, 0) 70%),
+    var(--night);
+  background-attachment: fixed;
+}
+
+.field > span, .field > legend { margin-bottom: 0; }
+
+/* ---- HUD: one row less, glass over the content ---- */
+.hud {
+  padding: calc(0.7rem + env(safe-area-inset-top)) 16px 0.75rem;
+  background: rgba(26, 24, 56, 0.86);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+.badge { width: 3.6rem; height: 3.6rem; }
+.badge-label { font-size: 0.65rem; }
+.badge-num { font-size: 1.55rem; }
+.hud-name { font-size: 1.2rem; }
+.hud-rank { font-size: 0.9rem; font-weight: 600; }
+.streak { gap: 0.25rem; font-size: 1.25rem; color: var(--chalk-dim); opacity: 0.6; }
+.streak.on { color: var(--flame); opacity: 1; }
+.streak.on .display { color: var(--chalk); }
+.xp-row { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.65rem; }
+.xp-row .xpbar { flex: 1; margin: 0; height: 0.6rem; }
+.xp-text { font-size: 0.85rem; color: var(--chalk-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.xpbar-fill { background: linear-gradient(90deg, #ffb83f, var(--signal)); }
+
+/* ---- Attribute tile: the visual key for every exercise ---- */
+.attr-tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 12px;
+  color: var(--c);
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+}
+.attr-tile.sm { width: 1.9rem; height: 1.9rem; border-radius: 8px; }
+
+/* ---- Day track ---- */
+.day-track { display: flex; align-items: center; gap: 5px; margin: -0.2rem 0 1rem; }
+.day-track .seg { flex: 1; height: 0.45rem; border-radius: 999px; background: var(--pitch); transition: background 0.3s; }
+.day-track .seg.on { background: var(--c); }
+.day-bonus {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--chalk-dim);
+}
+.day-track.full .day-bonus { color: var(--signal); }
+.day-track.full .day-bonus svg { fill: var(--signal); }
+
+/* ---- Quest cards ---- */
+.quests { gap: 0.55rem; }
+.quest-main {
+  grid-template-columns: auto 1fr auto auto;
+  gap: 0.8rem;
+  padding: 0.8rem 0.8rem 0.8rem 0.8rem;
+  border: 1px solid transparent;
+  border-left: 1px solid transparent;
+  border-radius: 16px;
+  background: var(--pitch);
+}
+.quest-title { font-size: 1.08rem; line-height: 1.2; }
+.quest-attr { color: var(--chalk-dim); font-weight: 500; font-size: 0.85rem; }
+.quest-amount .display { font-size: 1.4rem; }
+.quest-check {
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 2px solid var(--line);
+  color: var(--night);
+}
+.quest.done .quest-main { background: transparent; outline: none; border: 1px dashed var(--line); }
+.quest.done .attr-tile { opacity: 0.55; }
+.quest.done .quest-check { background: var(--c); border-color: var(--c); color: var(--night); }
+.quests.swapping .quest-check { border-style: dashed; border-color: var(--signal); color: var(--signal); }
+.quest.locked { opacity: 0.4; }
+.quest-main:disabled { cursor: default; }
+
+.today-actions { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start; }
+.today-actions .hint { margin: 0; }
+.today-actions .cleared { margin: 0; align-self: stretch; }
+.joker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  background: none;
+  border: 2px dashed var(--line);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.joker svg { color: var(--signal); }
+.joker-count { font-size: 0.8rem; color: var(--signal); }
+
+/* ---- Arena teaser on Today ---- */
+.arena-teaser {
+  margin-top: 1.5rem;
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.7rem 0.9rem 0.7rem 0.7rem;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(70% 140% at 0% 50%, color-mix(in srgb, var(--c) 22%, transparent), transparent 70%),
+    var(--pitch);
+  text-align: left;
+}
+.teaser-monster { width: 4.2rem; height: 4.2rem; }
+.arena-teaser.won .teaser-monster { filter: grayscale(1); opacity: 0.6; }
+.teaser-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.teaser-label { font-size: 0.8rem; color: var(--chalk-dim); font-weight: 600; }
+.teaser-text strong { font-size: 1.1rem; }
+.teaser-sub { font-size: 0.85rem; color: var(--signal); font-weight: 700; }
+.teaser-hp { display: block; height: 0.35rem; margin-top: 0.25rem; border-radius: 999px; background: var(--night); overflow: hidden; }
+.teaser-hp span { display: block; height: 100%; background: var(--hp); }
+.teaser-go {
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: var(--hp);
+  color: var(--night);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.arena-teaser.won .teaser-go { background: var(--pitch-hi); color: var(--chalk); }
+
+/* ---- Arena ---- */
+.battle { border-radius: 20px; border-width: 1px; }
+.battle.is-boss { border-width: 2px; }
+.enemy-portrait {
+  width: 6rem;
+  height: 6rem;
+  padding: 0.35rem;
+  border: none;
+  border-radius: 20px;
+  background: radial-gradient(circle at 50% 62%, color-mix(in srgb, var(--c) 34%, transparent), var(--night) 72%);
+}
+.is-boss .enemy-portrait {
+  width: 7.5rem;
+  height: 7.5rem;
+  background: radial-gradient(circle at 50% 62%, rgba(255, 79, 123, 0.38), var(--night) 72%);
+}
+.enemy-portrait .monster { width: 100%; height: 100%; display: block; }
+.enemy-portrait.hit .monster { animation: shake 0.35s ease-out; }
+.defeated .enemy-portrait .monster { filter: grayscale(1); opacity: 0.55; transform: rotate(-10deg) translateY(4px); }
+.phase-top { gap: 0.6rem; }
+.attack { border-radius: 12px; }
+.attack.finish { background: color-mix(in srgb, var(--c) 18%, var(--night)); border-color: var(--c); }
+.pb-monster { width: 2rem; height: 2rem; }
+.past-battles li { grid-template-columns: 2.2rem 1fr auto; }
+.victory-enemy { width: 10rem; height: 10rem; font-size: inherit; display: block; }
+
+/* ---- Stats ---- */
+.chip-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--c); margin-right: 0.4rem; }
+.chips button { display: inline-flex; align-items: center; }
+
+/* ---- Tabs ---- */
+.tabs {
+  background: rgba(26, 24, 56, 0.92);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+}
+.tabs button { gap: 0.2rem; padding: 0.55rem 0 0.6rem; border-top-width: 2px; color: var(--chalk-dim); }
+.tabs button.active { color: var(--signal); border-top-color: var(--signal); }
+.battle.attr-staerke { --c: var(--staerke); }
+.battle.attr-ausdauer { --c: var(--ausdauer); }
+.battle.attr-beweglichkeit { --c: var(--beweglichkeit); }

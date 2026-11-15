@@ -14,6 +14,7 @@ import {
   type QuestAttr,
 } from '../game';
 import type { Game } from '../store';
+import { AttrTile } from './Icons';
 import { EquipmentPicker, Segmented } from './ui';
 
 export function SettingsView({ game }: { game: Game }) {
@@ -118,14 +119,12 @@ export function SettingsView({ game }: { game: Game }) {
   );
 }
 
-const ICONS = ['🏋️', '🚴', '🏊', '⚽', '🥊', '🧗', '🤾', '🏀', '🎾', '🧎', '🥾', '❤️'];
 const UNITS = ['Wdh.', 'Min.', 'Sek.', 'km', 'Schritte', 'Sätze'];
 
 function CustomQuests({ game }: { game: Game }) {
   const { state } = game;
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
-  const [icon, setIcon] = useState(ICONS[0]);
   const [attr, setAttr] = useState<QuestAttr>('staerke');
   const [amount, setAmount] = useState('10');
   const [unit, setUnit] = useState(UNITS[0]);
@@ -140,7 +139,7 @@ function CustomQuests({ game }: { game: Game }) {
     const n = Number(amount.replace(',', '.'));
     if (!title.trim()) return setError('Gib der Quest einen Namen, z. B. „Klimmzüge“.');
     if (!Number.isFinite(n) || n <= 0) return setError('Gib eine Menge größer als 0 ein.');
-    game.addCustomQuest(makeCustomQuest({ title, icon, attr, amount: n, unit, daily: daily && dailyCount < MAX_DAILY_QUESTS }));
+    game.addCustomQuest(makeCustomQuest({ title, icon: '', attr, amount: n, unit, daily: daily && dailyCount < MAX_DAILY_QUESTS }));
     setTitle('');
     setAmount('10');
     setDaily(false);
@@ -157,7 +156,7 @@ function CustomQuests({ game }: { game: Game }) {
         <ul className="quest-list">
           {state.customQuests.map((q) => (
             <li key={q.id} className={`attr-${q.attr}`}>
-              <span aria-hidden>{q.icon}</span>
+              <AttrTile attr={q.attr} size="sm" />
               <span className="ql-text">
                 <strong>{q.title}</strong>
                 <span>
@@ -181,16 +180,6 @@ function CustomQuests({ game }: { game: Game }) {
             <span>Name</span>
             <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={24} placeholder="Klimmzüge" />
           </label>
-          <fieldset className="field">
-            <legend>Symbol</legend>
-            <div className="icon-picker">
-              {ICONS.map((i) => (
-                <button type="button" key={i} aria-pressed={icon === i} onClick={() => setIcon(i)}>
-                  {i}
-                </button>
-              ))}
-            </div>
-          </fieldset>
           <fieldset className="field">
             <legend>Bringt Punkte für</legend>
             <Segmented options={QUEST_ATTRS.map((a) => ({ value: a, label: ATTR_LABEL[a] }))} value={attr} onChange={setAttr} />
@@ -261,7 +250,7 @@ function BuiltInQuests({ game }: { game: Game }) {
           const enabled = !reason && !state.disabledQuests.includes(q.id);
           return (
             <li key={q.id} className={`attr-${q.attr} ${enabled ? '' : 'off'}`}>
-              <span aria-hidden>{q.icon}</span>
+              <AttrTile attr={q.attr} size="sm" />
               <label className="ql-text switch-label" htmlFor={`q-${q.id}`}>
                 <strong>{q.title}</strong>
                 <span>{reason ?? ATTR_LABEL[q.attr]}</span>
