@@ -1,24 +1,36 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureBattles, logDamage, settleBattles, undoDamage, type Battle } from './battle';
 import {
   autoCompleteFromHealth,
-  dailyQuests,
+  completeQuest as completeQuestIn,
+  dayFor,
+  dayOutdated,
   emptyState,
-  generateDay,
   isGameState,
   levelFromXp,
   normalize,
   randomPool,
   rerollQuest,
   scaledAmount,
+  setReading as setReadingIn,
   startNewSeason,
   toDateKey,
   totalXp,
+  uncheckQuest as uncheckQuestIn,
   type GameState,
   type Profile,
+  type QuestInstance,
   type QuestTemplate,
 } from './game';
 import { connectHealth, fetchHealthDays, healthSupported } from './health';
+import { proofFor } from './proof';
+import {
+  logPages as logPagesIn,
+  startBook as startBookIn,
+  undoLastPages,
+  type LogPagesInput,
+  type LogPagesResult,
+} from './reading';
 
 const KEY = 'questfit.state.v1';
 
@@ -59,9 +71,16 @@ export function useToday(): string {
 }
 
 const currentLevel = (s: GameState) => levelFromXp(totalXp(s)).level;
+const easyOn = (s: GameState) => !!s.profile?.easyVariants;
+
+/** Quests proven by a photo (reading) are ticked off by logPages only, never by hand. */
+const needsPhoto = (s: GameState, q: QuestInstance | undefined) => !!q && proofFor(q, s.customQuests).kind === 'photo';
 
 export function useGame(today: string) {
   const [state, setState] = useState<GameState>(load);
+  // latest committed state, for actions that must answer right away (logPages)
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => save(state), [state]);
 
@@ -71,11 +90,9 @@ export function useGame(today: string) {
       if (!s.profile) return s;
       let next = s;
       const existing = s.days[today];
-      // Days made before the step goal became fixed get it, as long as nothing is ticked yet.
-      const outdated = existing && !existing.quests.some((q) => q.templateId === 'steps') && !existing.quests.some((q) => q.done);
-      if (!existing || outdated) {
-        const day = generateDay(today, currentLevel(s), s.profile.difficulty, randomPool(s), dailyQuests(s));
-        next = { ...s, days: { ...s.days, [today]: day } };
+      // Days made before a fixed quest (step goal, reading) existed get it, as long as nothing is ticked yet.
+      if (!existing || dayOutdated(existing, s.profile)) {
+        next = { ...s, days: { ...s.days, [today]: dayFor(s, today, currentLevel(s)) } };
       }
       return ensureBattles(next, today, currentLevel(next));
     });
@@ -149,13 +166,30 @@ export function useGame(today: string) {
     setState({ ...emptyState(), profile });
   }, []);
 
-  const toggleQuest = useCallback(
+  /**
+   * Mark a quest done. Call only after its proof (camera count, presence timer) succeeded.
+   * The reading quest (photo proof) is ignored here: it is ticked off by logPages.
+   */
+  const completeQuest = useCallback(
+    (questId: string) => {
+      setState((s) => {
+        const day = s.days[today];
+        if (!day || needsPhoto(s, day.quests.find((q) => q.id === questId))) return s;
+        const next = completeQuestIn(day, questId);
+        return next === day ? s : { ...s, days: { ...s.days, [today]: next } };
+      });
+    },
+    [today],
+  );
+
+  /** Undo a finished quest. Always allowed. */
+  const uncheckQuest = useCallback(
     (questId: string) => {
       setState((s) => {
         const day = s.days[today];
         if (!day) return s;
-        const quests = day.quests.map((q) => (q.id === questId ? { ...q, done: !q.done } : q));
-        return { ...s, days: { ...s.days, [today]: { ...day, quests } } };
+        const next = uncheckQuestIn(day, questId);
+        return next === day ? s : { ...s, days: { ...s.days, [today]: next } };
       });
     },
     [today],
@@ -166,7 +200,7 @@ export function useGame(today: string) {
       setState((s) => {
         const day = s.days[today];
         if (!day || !s.profile) return s;
-        const next = rerollQuest(day, questId, currentLevel(s), s.profile.difficulty, randomPool(s));
+        const next = rerollQuest(day, questId, currentLevel(s), s.profile.difficulty, randomPool(s), easyOn(s));
         return { ...s, days: { ...s.days, [today]: next } };
       });
     },
@@ -221,7 +255,7 @@ export function useGame(today: string) {
       let next = s;
       const day = s.days[today];
       if (day && !day.quests.some((q) => q.done)) {
-        const fresh = generateDay(today, level, s.profile.difficulty, randomPool(s), dailyQuests(s));
+        const fresh = dayFor(s, today, level);
         next = { ...next, days: { ...next.days, [today]: fresh } };
       }
       const untouched = (b: Battle) => b.end >= today && !b.defeatedOn && b.phases.every((p) => p.log.length === 0);
@@ -229,6 +263,41 @@ export function useGame(today: string) {
       return ensureBattles(next, today, level);
     });
   }, [today]);
+
+  /** Switch the daily reading quest on or off (today follows right away, see game.setReading). */
+  const setReading = useCallback(
+    (on: boolean) => setState((s) => setReadingIn(s, today, on)),
+    [today],
+  );
+
+  /** Start a new book (empty titles are ignored). */
+  const startBook = useCallback(
+    (title: string, startPage = 0) => setState((s) => startBookIn(s, title, today, startPage)),
+    [today],
+  );
+
+  /**
+   * Log the page reached with a photo of it. The only way to tick off the reading quest.
+   * Returns at once what happened (pages today, quest amount, done, or a German error).
+   */
+  const logPages = useCallback(
+    (input: LogPagesInput): LogPagesResult => {
+      const snapshot = stateRef.current;
+      const result = logPagesIn(snapshot, today, input);
+      if (!result.error) {
+        // build on newer state if something else changed in between
+        setState((s) => (s === snapshot ? result.state : logPagesIn(s, today, input).state));
+      }
+      return result;
+    },
+    [today],
+  );
+
+  /** Take back the last page entry of a book (typo). */
+  const undoPages = useCallback(
+    (bookId: string) => setState((s) => undoLastPages(s, today, bookId)),
+    [today],
+  );
 
   const newSeason = useCallback(
     (length: number) => setState((s) => startNewSeason(s, today, length)),
@@ -244,7 +313,8 @@ export function useGame(today: string) {
     undoHit,
     health: { supported: healthSupported(), syncing, error: healthError, connect, disconnect, sync: syncHealth },
     startGame,
-    toggleQuest,
+    completeQuest,
+    uncheckQuest,
     reroll,
     updateProfile,
     addCustomQuest,
@@ -252,6 +322,10 @@ export function useGame(today: string) {
     setQuestEnabled,
     newSeason,
     applyToToday,
+    setReading,
+    startBook,
+    logPages,
+    undoPages,
     replaceState,
     resetAll,
   };

@@ -15,7 +15,7 @@ import {
   undoDamage,
   weekStart,
 } from './battle';
-import { QUEST_POOL, attributes, autoCompleteFromHealth, emptyState, exerciseTotals, generateDay, totalXp, type GameState } from './game';
+import { QUEST_POOL, addDays, attributes, autoCompleteFromHealth, emptyState, exerciseTotals, generateDay, normalize, totalXp, type GameState } from './game';
 
 const profile = { name: 'A', difficulty: 2 as const, seasonDays: 66, startDate: '2026-11-01' };
 
@@ -120,7 +120,7 @@ describe('health auto-complete', () => {
     };
     const next = autoCompleteFromHealth(s, '2026-11-16');
     const byId = Object.fromEntries(next.days['2026-11-16'].quests.map((q) => [q.templateId, q.done]));
-    expect(byId).toEqual({ steps: true, run: false, pushups: false, stretch: false });
+    expect(byId).toEqual({ steps: true, read: false, run: false, pushups: false, stretch: false });
     expect(autoCompleteFromHealth({ ...s, health: { ...s.health, connected: false } }, '2026-11-16').days).toBe(s.days);
   });
 });
@@ -142,5 +142,47 @@ describe('enemy waves', () => {
     expect(new Set(list.map((b) => b.enemyId)).size).toBe(3);
     expect(list[1].xp).toBeLessThan(list[0].xp);
     expect(list.every((b) => b.defeatedOn)).toBe(true);
+  });
+});
+
+describe('boss steps phase', () => {
+  it('gives every boss exactly one steps phase', async () => {
+    const { bossMoves, BOSS_STEPS_BASE } = await import('./battle');
+    for (const b of BOSSES) {
+      const moves = bossMoves(b);
+      expect(moves.filter((m) => m.kind === 'steps')).toHaveLength(1);
+      const had = b.moves.find((m) => m.kind === 'steps');
+      if (had) expect(moves).toBe(b.moves);
+      else expect(moves).toEqual([...b.moves, { kind: 'steps', base: BOSS_STEPS_BASE }]);
+    }
+  });
+
+  it('appends 35000 steps (by difficulty only) to bosses without steps', () => {
+    const seen = new Set<string>();
+    for (let w = 0; w < 60; w++) {
+      const date = addDays('2026-11-16', 7 * w);
+      const boss = generateBoss(date, 20, 2);
+      const template = BOSSES.find((b) => b.id === boss.enemyId)!;
+      seen.add(template.id);
+      const stepPhases = boss.phases.filter((p) => p.kind === 'steps');
+      expect(stepPhases).toHaveLength(1);
+      if (!template.moves.some((m) => m.kind === 'steps')) {
+        expect(boss.phases).toHaveLength(4);
+        expect(boss.phases[3]).toMatchObject({ id: 'p3', kind: 'steps', title: 'Schritte', unit: 'Schritte', target: 35000 });
+        expect(generateBoss(date, 1, 1).phases[3].target).toBe(21000);
+        expect(generateBoss(date, 1, 3).phases[3].target).toBe(52500);
+      } else {
+        expect(boss.phases).toHaveLength(3);
+      }
+    }
+    expect(seen.size).toBe(BOSSES.length); // every boss came up at least once
+  });
+
+  it('keeps bosses from old saves as they are', () => {
+    const boss = generateBoss('2026-11-16', 1, 2);
+    const old = { ...boss, phases: boss.phases.filter((p) => p.kind !== 'steps') };
+    const loaded = normalize({ ...emptyState(), profile, battles: [old] });
+    expect(loaded.battles[0].phases).toHaveLength(old.phases.length);
+    expect(ensureBattles(loaded, '2026-11-17', 1).battles.find((b) => b.boss)!.phases).toHaveLength(old.phases.length);
   });
 });

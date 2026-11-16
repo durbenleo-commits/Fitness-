@@ -11,6 +11,7 @@ import {
   totalXp,
   type GameState,
 } from './game';
+import { finishedBooks, totalPagesRead } from './reading';
 
 export interface Achievement {
   id: string;
@@ -63,6 +64,9 @@ export const ACHIEVEMENTS: Achievement[] = [
     target: 100000,
     progress: (c) => Math.max(Object.values(c.state.health.days).reduce((s, d) => s + d.steps, 0), totalFor(c.state, 'steps')),
   },
+  { id: 'book-1', icon: 'book', tier: 'bronze', title: 'Bücherwurm', description: 'Lies dein erstes Buch zu Ende.', target: 1, progress: (c) => finishedBooks(c.state).length },
+  { id: 'book-5', icon: 'book', tier: 'silver', title: 'Bibliothek', description: 'Lies 5 Bücher zu Ende.', target: 5, progress: (c) => finishedBooks(c.state).length },
+  { id: 'pages-500', icon: 'book', tier: 'silver', title: 'Seitenfresser', description: 'Lies insgesamt 500 Seiten.', target: 500, progress: (c) => totalPagesRead(c.state) },
   {
     id: 'season',
     icon: 'flag', tier: 'gold',

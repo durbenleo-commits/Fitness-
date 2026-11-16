@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { currentEnemy, hpLeft } from '../battle';
 import {
   ATTR_LABEL,
@@ -9,8 +9,8 @@ import {
   isCleared,
   questsDone,
   isDailyInstance,
-  isTrackedQuest,
   rankFor,
+  READ_QUEST,
   seasonOver,
   seasonDay,
   summarizeSeason,
@@ -19,12 +19,15 @@ import {
   type QuestInstance,
 } from '../game';
 import type { Game } from '../store';
-import { isScannable } from '../pose';
+import { PRESENCE } from '../pose';
+import { healthProgress, proofFor, scanTarget, type HealthMetric, type ProofKind } from '../proof';
+import { pagesReadOn } from '../reading';
 import { AttrTile, Badge3D, Icon } from './Icons';
+import { ReadingSheet } from './Reading';
 import { Scanner } from './Scanner';
 import { Sprite } from './Sprites';
 import { SEASON_OPTIONS } from './Onboarding';
-import { Segmented } from './ui';
+import { METRIC_HINT, PROOF_ICON, PROOF_LABEL, Segmented, Sheet, fmtNum } from './ui';
 
 export function Hud(props: { profile: Profile; level: number; intoLevel: number; needed: number; streak: number; today: string }) {
   const { profile, level, intoLevel, needed, streak, today } = props;
@@ -65,10 +68,17 @@ export function Hud(props: { profile: Profile; level: number; intoLevel: number;
   );
 }
 
+/** The open proof flow on the Today screen. */
+type Flow =
+  | { kind: 'scan'; quest: QuestInstance; scanId: string; target: number; perUnit?: number }
+  | { kind: 'health'; quest: QuestInstance; metric: HealthMetric }
+  | { kind: 'read' }
+  | { kind: 'undo'; quest: QuestInstance };
+
 export function TodayView({ game, today, onOpenArena }: { game: Game; today: string; onOpenArena: () => void }) {
   const { state } = game;
   const [swapping, setSwapping] = useState(false);
-  const [scanQuest, setScanQuest] = useState<QuestInstance | null>(null);
+  const [flow, setFlow] = useState<Flow | null>(null);
   const [filter, setFilterState] = useState<'open' | 'done'>('open');
   // Quests ticked off while looking at "Offen" stay in view until the tab changes,
   // so the check animation is visible instead of the card vanishing.
@@ -78,6 +88,7 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
     setJustDone([]);
   };
   const markDone = (id: string) => setJustDone((l) => [...l, id]);
+  const close = useCallback(() => setFlow(null), []);
   const day = state.days[today];
   if (!day || !state.profile) return null;
   const done = day.quests.filter((q) => q.done).length;
@@ -90,6 +101,22 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
   const shown = day.quests.filter((q) => (filter === 'open' ? !q.done || justDone.includes(q.id) : q.done));
   const mood =
     done === 0 ? 'Neuer Tag, neue Quests. Fang mit der leichtesten an.' : open > 0 ? `Läuft. Noch ${open} ${open === 1 ? 'Quest' : 'Quests'} bis zum Bonus.` : 'Alles erledigt. Morgen geht es weiter.';
+
+  /** Tapping a quest starts its proof; a done quest asks whether to take it back. */
+  const startProof = (q: QuestInstance) => {
+    if (q.done) return setFlow({ kind: 'undo', quest: q });
+    const proof = proofFor(q, state.customQuests);
+    switch (proof.kind) {
+      case 'camera':
+        return setFlow({ kind: 'scan', quest: q, scanId: proof.scanId, target: scanTarget(proof, q.amount), perUnit: proof.perUnit });
+      case 'presence':
+        return setFlow({ kind: 'scan', quest: q, scanId: PRESENCE, target: proof.seconds });
+      case 'health':
+        return setFlow({ kind: 'health', quest: q, metric: proof.metric });
+      case 'photo':
+        return setFlow({ kind: 'read' });
+    }
+  };
 
   return (
     <section>
@@ -141,24 +168,20 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         )}
         {shown.map((q) => {
           const swappable = !q.done && !isDailyInstance(state, q);
+          const proof = proofFor(q, state.customQuests);
           return (
             <QuestRow
               key={q.id}
               quest={q}
               swapMode={swapping}
               swappable={swappable}
-              tracked={state.health.connected && isTrackedQuest(q.templateId) ? healthValue(state, today, q.templateId) : null}
-              camera={!q.done && isScannable(q.templateId)}
+              proof={proof.kind}
+              note={questNote(state, today, q)}
               onTap={() => {
-                if (swapping) {
-                  if (!swappable) return;
-                  game.reroll(q.id);
-                  setSwapping(false);
-                } else if (!q.done && isScannable(q.templateId)) setScanQuest(q);
-                else {
-                  if (!q.done) markDone(q.id);
-                  game.toggleQuest(q.id);
-                }
+                if (!swapping) return startProof(q);
+                if (!swappable) return;
+                game.reroll(q.id);
+                setSwapping(false);
               }}
             />
           );
@@ -180,7 +203,10 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
           </p>
         ) : (
           <>
-            <p className="hint">Tippe auf eine Quest, wenn du sie erledigt hast. Beim Kamera-Symbol zählt die Kamera mit.</p>
+            <p className="hint">
+              Jede Quest braucht einen Nachweis: Die Kamera zählt mit, beim Lesen machst du ein Foto der Seite, Schritte und Training kommen
+              aus Samsung Health.
+            </p>
             {canReroll && done < day.quests.length && (
               <button className="joker" onClick={() => setSwapping(true)}>
                 <Icon name="swap" size={18} />
@@ -191,26 +217,47 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         )}
       </div>
 
-      {scanQuest && (
+      {flow?.kind === 'scan' && (
         <Scanner
-          exerciseId={scanQuest.templateId}
-          title={scanQuest.title}
-          target={scanQuest.amount}
-          unit={scanQuest.unit}
-          allowManual={!state.profile.cameraRequired}
+          exerciseId={flow.scanId}
+          title={flow.quest.title}
+          target={flow.target}
+          unit={flow.quest.unit}
+          easy={!!flow.quest.easy}
+          perUnit={flow.perUnit}
           onDone={(amount) => {
-            if (amount >= scanQuest.amount) {
-              markDone(scanQuest.id);
-              game.toggleQuest(scanQuest.id);
+            if (amount >= flow.target) {
+              markDone(flow.quest.id);
+              game.completeQuest(flow.quest.id);
             }
-            setScanQuest(null);
+            setFlow(null);
           }}
-          onManual={() => {
-            markDone(scanQuest.id);
-            game.toggleQuest(scanQuest.id);
-            setScanQuest(null);
+          onClose={close}
+        />
+      )}
+      {flow?.kind === 'health' && <HealthSheet game={game} today={today} quest={flow.quest} metric={flow.metric} onClose={close} />}
+      {flow?.kind === 'read' && (
+        <ReadingSheet
+          game={game}
+          today={today}
+          onClose={close}
+          onCompleted={() => {
+            const q = day.quests.find((x) => x.templateId === READ_QUEST);
+            if (q) markDone(q.id);
           }}
-          onClose={() => setScanQuest(null)}
+        />
+      )}
+      {flow?.kind === 'undo' && (
+        <UndoSheet
+          quest={flow.quest}
+          proof={proofFor(flow.quest, state.customQuests).kind}
+          onCancel={close}
+          onRead={() => setFlow({ kind: 'read' })}
+          onConfirm={() => {
+            game.uncheckQuest(flow.quest.id);
+            setJustDone((l) => l.filter((x) => x !== flow.quest.id));
+            setFlow(null);
+          }}
         />
       )}
 
@@ -235,55 +282,64 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
   );
 }
 
-function healthValue(state: GameState, today: string, templateId: string): number {
-  const h = state.health.days[today];
-  if (!h) return 0;
-  return templateId === 'steps' ? h.steps : h.runKm;
+/** The small line under an open quest: health progress, pages read today, or attribute and XP. */
+function questNote(state: GameState, today: string, q: QuestInstance): string {
+  const fallback = `${ATTR_LABEL[q.attr]} · +${q.xp} XP`;
+  if (q.done) return fallback;
+  const value = healthProgress(q, state.health.days, today, state.customQuests);
+  if (value !== null) {
+    return state.health.connected ? `${fmtNum(value)} von ${fmtNum(q.amount)} ${q.unit} · Samsung Health` : 'Kommt aus Samsung Health';
+  }
+  if (q.templateId === READ_QUEST) {
+    const pages = pagesReadOn(state, today);
+    if (pages > 0) return `Heute ${pages} von ${q.amount} Seiten`;
+  }
+  return fallback;
 }
 
 function QuestRow(props: {
   quest: QuestInstance;
   swapMode: boolean;
   swappable: boolean;
-  camera: boolean;
-  tracked: number | null;
+  proof: ProofKind;
+  note: string;
   onTap: () => void;
 }) {
-  const { quest: q, swapMode, swappable, camera, tracked, onTap } = props;
+  const { quest: q, swapMode, swappable, proof, note, onTap } = props;
   const [burst, setBurst] = useState(0);
+  const wasDone = useRef(q.done);
 
-  const tap = () => {
-    if (!swapMode && !q.done && !camera) {
+  // Celebrate when the quest turns done (after a scan, a page photo, or Samsung Health).
+  useEffect(() => {
+    if (q.done && !wasDone.current) {
       setBurst((b) => b + 1);
       navigator.vibrate?.(30);
     }
-    onTap();
-  };
+    wasDone.current = q.done;
+  }, [q.done]);
+
+  const label = swapMode ? `${q.title} tauschen` : q.done ? `${q.title}, erledigt. Zurücknehmen?` : `${q.title}: Nachweis, ${PROOF_LABEL[proof]}`;
 
   return (
     <li className={`quest attr-${q.attr} ${q.done ? 'done' : ''} ${swapMode && !swappable ? 'locked' : ''}`}>
-      <button className="quest-main" onClick={tap} aria-pressed={swapMode ? undefined : q.done} disabled={swapMode && !swappable}>
+      <button className="quest-main" onClick={onTap} aria-label={label} disabled={swapMode && !swappable}>
         <AttrTile attr={q.attr} />
         <span className="quest-text">
           <span className="quest-title">{q.title}</span>
-          <span className="quest-attr">
-            {tracked !== null && !q.done
-              ? `${tracked.toLocaleString('de-DE')} von ${q.amount.toLocaleString('de-DE')}, Samsung Health`
-              : `${ATTR_LABEL[q.attr]} · +${q.xp} XP`}
-          </span>
+          <span className={`quest-attr ${proof === 'health' && !q.done ? 'health' : ''}`}>{note}</span>
         </span>
         <span className="quest-amount">
           <span className="display">{q.amount.toLocaleString('de-DE')}</span>
           <span className="quest-unit">{q.unit}</span>
         </span>
-        <span className="quest-check" aria-hidden>
+        <span className={`quest-check proof-${proof}`} aria-hidden>
           {swapMode && swappable ? (
             <Icon name="swap" size={20} />
           ) : q.done ? (
             <Badge3D icon="check" tone={q.attr} shape="coin" size={42} />
-          ) : camera ? (
-            <Icon name="camera" size={20} />
-          ) : null}
+          ) : (
+            <Icon name={PROOF_ICON[proof]} size={20} />
+          )}
         </span>
         {burst > 0 && q.done && (
           <span key={burst} className="xp-burst display" aria-hidden>
@@ -292,6 +348,106 @@ function QuestRow(props: {
         )}
       </button>
     </li>
+  );
+}
+
+/** Health quests are never ticked by hand: this explains where the number comes from. */
+function HealthSheet({ game, today, quest: q, metric, onClose }: { game: Game; today: string; quest: QuestInstance; metric: HealthMetric; onClose: () => void }) {
+  const { state, health } = game;
+  const value = healthProgress(q, state.health.days, today, state.customQuests) ?? 0;
+  const connected = state.health.connected;
+  const last = state.health.lastSync ? new Date(state.health.lastSync) : null;
+  return (
+    <Sheet title={q.title} onClose={onClose}>
+      <div className="proof-sheet">
+        <div className="proof-head">
+          <Badge3D icon="heart" tone="ausdauer" size={46} />
+          <span>
+            <strong>Bestätigt von Samsung Health</strong>
+            <small>Diese Quest hakt sich von selbst ab. Von Hand geht es nicht.</small>
+          </span>
+        </div>
+        {connected && (
+          <div className="proof-progress">
+            <span className="proof-value">
+              <span className="display">{fmtNum(value)}</span> von {fmtNum(q.amount)} {q.unit}
+            </span>
+            <span className="proof-bar" aria-hidden>
+              <span style={{ width: `${Math.min(value / q.amount, 1) * 100}%` }} />
+            </span>
+          </div>
+        )}
+        <p className="small-text">{METRIC_HINT[metric]} Sobald Samsung Health genug meldet, ist die Quest erledigt.</p>
+        {!health.supported ? (
+          <p className="proof-note">
+            Samsung Health kann nur die Android-App lesen, nicht die Browser-Version. Installiere die neueste Questfit-APK, dann zählt es
+            automatisch.
+          </p>
+        ) : connected ? (
+          <>
+            {last && (
+              <p className="small-text">
+                Zuletzt abgeglichen: {last.toLocaleString('de-DE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </p>
+            )}
+            <button className="secondary" onClick={health.sync} disabled={health.syncing}>
+              {health.syncing ? 'Gleiche ab …' : 'Jetzt abgleichen'}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="proof-note">Samsung Health ist noch nicht verbunden.</p>
+            <button className="primary" onClick={health.connect}>
+              Mit Samsung Health verbinden
+            </button>
+          </>
+        )}
+        {health.error && (
+          <p className="error" role="alert">
+            {health.error}
+          </p>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+function UndoSheet({
+  quest: q,
+  proof,
+  onCancel,
+  onConfirm,
+  onRead,
+}: {
+  quest: QuestInstance;
+  proof: ProofKind;
+  onCancel: () => void;
+  onConfirm: () => void;
+  onRead: () => void;
+}) {
+  return (
+    <Sheet title="Zurücknehmen?" onClose={onCancel}>
+      <div className="proof-sheet">
+        <p>
+          <strong>{q.title}</strong> ist erledigt. Nimmst du das zurück, fallen die {q.xp} XP dafür weg.
+          {proof === 'health' && ' Solange Samsung Health genug meldet, hakt sich die Quest gleich wieder ab.'}
+          {proof === 'photo' && ' Deine eingetragenen Seiten bleiben gespeichert.'}
+        </p>
+        {proof === 'photo' && (
+          <button className="primary" onClick={onRead}>
+            Seiten eintragen
+          </button>
+        )}
+        <div className="row">
+          <button className="secondary" onClick={onCancel}>
+            Behalten
+          </button>
+          <button className="danger grow" onClick={onConfirm}>
+            Zurücknehmen
+          </button>
+        </div>
+      </div>
+    </Sheet>
   );
 }
 

@@ -1,8 +1,10 @@
 // Pure game logic: no React, no storage. Everything here is unit-tested.
 import type { Battle, HealthDay } from './battle';
+import { metricValue, proofFor } from './proof';
+import type { Book } from './reading';
 import type { IconName } from './views/Icons';
 
-export type Attr = 'staerke' | 'ausdauer' | 'beweglichkeit' | 'disziplin';
+export type Attr = 'staerke' | 'ausdauer' | 'beweglichkeit' | 'intelligenz' | 'disziplin';
 export type QuestAttr = Exclude<Attr, 'disziplin'>;
 export type Difficulty = 1 | 2 | 3;
 
@@ -10,9 +12,11 @@ export const ATTR_LABEL: Record<Attr, string> = {
   staerke: 'Stärke',
   ausdauer: 'Ausdauer',
   beweglichkeit: 'Beweglichkeit',
+  intelligenz: 'Intelligenz',
   disziplin: 'Disziplin',
 };
 
+/** Physical attributes: random quests are drawn from these. Intelligenz only comes from reading. */
 export const QUEST_ATTRS: QuestAttr[] = ['staerke', 'ausdauer', 'beweglichkeit'];
 
 export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
@@ -114,7 +118,12 @@ export const QUEST_POOL: QuestTemplate[] = [
   { id: 'swim', title: 'Schwimmen', icon: '🏊', attr: 'ausdauer', base: 20, step: 5, unit: 'Min.', xp: 45, requires: ['pool'] },
   { id: 'gym', title: 'Gerätetraining', icon: '🏢', attr: 'staerke', base: 30, step: 5, unit: 'Min.', xp: 50, requires: ['gym'], noLevelScale: true },
   { id: 'bandstretch', title: 'Dehnen mit Band', icon: '🧘', attr: 'beweglichkeit', base: 8, step: 1, unit: 'Min.', xp: 25, requires: ['band'] },
+  // Fixed like the step goal, but only while reading is switched on (Profile.reading). Proven by logging pages with a photo.
+  { id: 'read', title: 'Lesen', icon: '📖', attr: 'intelligenz', base: 10, step: 1, unit: 'Seiten', xp: 30, noLevelScale: true, fixed: true },
 ];
+
+/** Template id of the daily reading quest. */
+export const READ_QUEST = 'read';
 
 export const CUSTOM_QUEST_XP = 30;
 export const MAX_CUSTOM_QUESTS = 12;
@@ -130,7 +139,24 @@ export interface QuestInstance {
   unit: string;
   xp: number;
   done: boolean;
+  easy?: boolean; // easier variant (title from VARIANTS); missing = normal
 }
+
+/** German titles of the easier variants. Amount and XP stay the same. */
+export const VARIANTS: Record<string, string> = {
+  pushups: 'Knie-Liegestütze',
+  squats: 'Halbe Kniebeugen',
+  lunges: 'Ausfallschritte mit Halt',
+  jacks: 'Hampelmänner ohne Sprung',
+  pullups: 'Australische Klimmzüge',
+  burpees: 'Hockstrecksprünge ohne Sprung',
+  mountain: 'Bergsteiger langsam',
+  plank: 'Unterarmstütz auf den Knien',
+  wallsit: 'Wandsitzen höher',
+  situps: 'Halbe Bauchpressen',
+};
+
+export const hasVariant = (templateId: string | undefined) => !!templateId && templateId in VARIANTS;
 
 export interface DayLog {
   date: string; // YYYY-MM-DD, local time
@@ -146,7 +172,12 @@ export interface Profile {
   equipment?: Equipment[]; // missing in old saves: DEFAULT_EQUIPMENT
   noJumping?: boolean;
   cameraRequired?: boolean; // exercises the camera can count must be done in front of it
+  easyVariants?: boolean; // hand out easier variants where there is one; missing = false
+  reading?: boolean; // daily reading quest; missing = true
 }
+
+/** Reading is on unless the player switched it off. */
+export const readingOn = (profile: Profile | null | undefined) => profile?.reading !== false;
 
 export interface SeasonRecord {
   startDate: string;
@@ -163,6 +194,12 @@ export interface GameState {
   seasons: SeasonRecord[]; // finished seasons, oldest first
   battles: Battle[];
   health: HealthState;
+  reading: ReadingState;
+}
+
+/** Reading log: books with their page entries (see reading.ts). */
+export interface ReadingState {
+  books: Book[];
 }
 
 export interface HealthState {
@@ -171,6 +208,7 @@ export interface HealthState {
   days: Record<string, HealthDay>;
 }
 
+/** Physical quests per day: the step goal plus three random ones. The reading quest comes on top. */
 export const QUESTS_PER_DAY = 4;
 export const REROLLS_PER_DAY = 1;
 export const DAY_CLEAR_BONUS = 50;
@@ -184,6 +222,7 @@ export const emptyState = (): GameState => ({
   seasons: [],
   battles: [],
   health: { connected: false, days: {} },
+  reading: { books: [] },
 });
 
 // ---------- dates ----------
@@ -321,23 +360,26 @@ export function scaledAmount(t: QuestTemplate, level: number, difficulty: Diffic
   return Math.max(t.step, Number(rounded.toFixed(1)));
 }
 
-function instantiate(t: QuestTemplate, level: number, difficulty: Difficulty, slot: number): QuestInstance {
+function instantiate(t: QuestTemplate, level: number, difficulty: Difficulty, slot: number, easy = false): QuestInstance {
+  const variant = easy && !t.custom ? VARIANTS[t.id] : undefined;
   return {
     id: `${t.id}-${slot}`,
     templateId: t.id,
-    title: t.title,
+    title: variant ?? t.title,
     icon: t.icon,
     attr: t.attr,
     amount: scaledAmount(t, level, difficulty),
     unit: t.unit,
     xp: t.xp,
     done: false,
+    ...(variant ? { easy: true } : {}),
   };
 }
 
 /**
  * One quest per attribute (where the pool allows), filled up with random extras,
- * all different. Daily custom quests are appended on top.
+ * all different. QUESTS_PER_DAY counts physical quests only, so a fixed reading
+ * quest comes on top. Daily custom quests are appended on top as well.
  */
 export function generateDay(
   date: string,
@@ -346,23 +388,25 @@ export function generateDay(
   pool: QuestTemplate[] = QUEST_POOL,
   daily: QuestTemplate[] = [],
   fixed: QuestTemplate[] = FIXED_QUESTS,
+  easy = false,
 ): DayLog {
   const rand = mulberry32(hash(date));
   const pick = (list: QuestTemplate[]) => list[Math.floor(rand() * list.length)];
   const random = pool.filter((q) => !fixed.includes(q) && !q.fixed && !q.retired);
   const chosen: QuestTemplate[] = [...fixed];
+  const physical = () => chosen.filter((q) => (QUEST_ATTRS as string[]).includes(q.attr)).length;
   for (const attr of QUEST_ATTRS) {
     const options = random.filter((q) => q.attr === attr && !chosen.includes(q));
-    if (options.length > 0 && chosen.length < QUESTS_PER_DAY) chosen.push(pick(options));
+    if (options.length > 0 && physical() < QUESTS_PER_DAY) chosen.push(pick(options));
   }
-  while (chosen.length < QUESTS_PER_DAY) {
+  while (physical() < QUESTS_PER_DAY) {
     const options = random.filter((t) => !chosen.includes(t));
     if (options.length === 0) break;
     chosen.push(pick(options));
   }
   return {
     date,
-    quests: [...chosen, ...daily].map((t, i) => instantiate(t, level, difficulty, i)),
+    quests: [...chosen, ...daily].map((t, i) => instantiate(t, level, difficulty, i, easy)),
     rerollsUsed: 0,
   };
 }
@@ -374,6 +418,7 @@ export function rerollQuest(
   level: number,
   difficulty: Difficulty,
   pool: QuestTemplate[] = QUEST_POOL,
+  easy = false,
 ): DayLog {
   const idx = day.quests.findIndex((q) => q.id === questId);
   if (idx < 0 || day.quests[idx].done || day.rerollsUsed >= REROLLS_PER_DAY) return day;
@@ -386,14 +431,66 @@ export function rerollQuest(
   const rand = mulberry32(hash(day.date + questId) + day.rerollsUsed + 1);
   const t = options[Math.floor(rand() * options.length)];
   const quests = [...day.quests];
-  quests[idx] = { ...instantiate(t, level, difficulty, idx), id: `${t.id}-${idx}-r${day.rerollsUsed + 1}` };
+  quests[idx] = { ...instantiate(t, level, difficulty, idx, easy), id: `${t.id}-${idx}-r${day.rerollsUsed + 1}` };
   return { ...day, quests, rerollsUsed: day.rerollsUsed + 1 };
 }
 
-/** Is this one of the daily custom quests (which cannot be swapped)? */
+/** Mark a quest done. Callers make sure the proof (camera, presence timer) succeeded first. */
+export function completeQuest(day: DayLog, questId: string): DayLog {
+  const q = day.quests.find((x) => x.id === questId);
+  if (!q || q.done) return day;
+  return { ...day, quests: day.quests.map((x) => (x.id === questId ? { ...x, done: true } : x)) };
+}
+
+/** Undo a finished quest. Always allowed. */
+export function uncheckQuest(day: DayLog, questId: string): DayLog {
+  const q = day.quests.find((x) => x.id === questId);
+  if (!q || !q.done) return day;
+  return { ...day, quests: day.quests.map((x) => (x.id === questId ? { ...x, done: false } : x)) };
+}
+
+/** Quests that are part of every day (step goal, reading). Never drawn at random, never swapped. */
 export const FIXED_QUESTS = QUEST_POOL.filter((q) => q.fixed);
 
-/** Pinned quests (the daily step goal, daily custom quests) cannot be swapped. */
+/** The fixed quests for this profile: the step goal, plus reading unless it is switched off. */
+export const fixedQuests = (profile: Profile | null | undefined) =>
+  FIXED_QUESTS.filter((q) => q.id !== READ_QUEST || readingOn(profile));
+
+/** Today's quests built from the state's settings (pool, daily custom quests, reading, easy variants). */
+export function dayFor(state: GameState, date: string, level: number): DayLog {
+  const p = state.profile;
+  return generateDay(date, level, p?.difficulty ?? 2, randomPool(state), dailyQuests(state), fixedQuests(p), !!p?.easyVariants);
+}
+
+/** A day made before a fixed quest existed (or before reading was on) and with nothing ticked gets rebuilt. */
+export function dayOutdated(day: DayLog | undefined, profile: Profile | null | undefined): boolean {
+  if (!day || day.quests.some((q) => q.done)) return false;
+  return fixedQuests(profile).some((t) => !day.quests.some((q) => q.templateId === t.id));
+}
+
+/**
+ * Switch the reading quest on or off. Today's day follows right away: switching on adds the
+ * quest unless the day is already cleared (that would take the clear away); switching off
+ * removes it unless it is already done.
+ */
+export function setReading(state: GameState, today: string, on: boolean): GameState {
+  if (!state.profile) return state;
+  const next: GameState = { ...state, profile: { ...state.profile, reading: on } };
+  const day = state.days[today];
+  if (!day) return next;
+  const has = day.quests.find((q) => q.templateId === READ_QUEST);
+  if (on && !has && !isCleared(day)) {
+    const t = QUEST_POOL.find((q) => q.id === READ_QUEST)!;
+    const quest = instantiate(t, 1, state.profile.difficulty, day.quests.length);
+    return { ...next, days: { ...next.days, [today]: { ...day, quests: [...day.quests, quest] } } };
+  }
+  if (!on && has && !has.done) {
+    return { ...next, days: { ...next.days, [today]: { ...day, quests: day.quests.filter((q) => q !== has) } } };
+  }
+  return next;
+}
+
+/** Pinned quests (the daily step goal, reading, daily custom quests) cannot be swapped. */
 export const isDailyInstance = (state: Pick<GameState, 'customQuests'>, q: QuestInstance) =>
   FIXED_QUESTS.some((t) => t.id === q.templateId) ||
   !!state.customQuests.find((t) => t.id === q.templateId && t.daily);
@@ -424,7 +521,7 @@ export const ENEMY_ATTR_POINTS = 2;
 export const BOSS_ATTR_POINTS = 5;
 
 export function attributes(state: GameState, filter: DayFilter = everyDay): Record<Attr, number> {
-  const out: Record<Attr, number> = { staerke: 0, ausdauer: 0, beweglichkeit: 0, disziplin: 0 };
+  const out: Record<Attr, number> = { staerke: 0, ausdauer: 0, beweglichkeit: 0, intelligenz: 0, disziplin: 0 };
   for (const day of daysWhere(state, filter)) {
     for (const q of day.quests) if (q.done) out[q.attr] += 1;
     if (isCleared(day)) out.disziplin += 1;
@@ -445,12 +542,15 @@ export interface PlayerClass {
 
 /**
  * An RPG class from the attribute mix: the leading attribute, or a hybrid when
- * two are close (within 20 %), or an all-rounder when all three are.
+ * two are close (within 20 %), or an all-rounder when all three are. Intelligenz
+ * only counts when it leads on its own (scholar); hybrids are physical only.
  */
 export function playerClass(a: Record<Attr, number>): PlayerClass {
   const main = (['staerke', 'ausdauer', 'beweglichkeit'] as const).map((k) => [k, a[k]] as const).sort((x, y) => y[1] - x[1]);
   const [first, second, third] = main;
-  if (first[1] < 5) return { name: 'Rekrut', line: 'Jede Klasse fängt hier an. Deine ersten Quests entscheiden, wohin es geht.' };
+  const intel = a.intelligenz ?? 0; // records from before the attribute existed
+  if (first[1] < 5 && intel < 5) return { name: 'Rekrut', line: 'Jede Klasse fängt hier an. Deine ersten Quests entscheiden, wohin es geht.' };
+  if (intel > first[1]) return { name: 'Gelehrter', line: 'Dein Kopf führt. Jede gelesene Seite macht dich klüger.' };
   const close = (v: number) => v >= first[1] * 0.8;
   if (close(second[1]) && close(third[1])) return { name: 'Allrounder', line: 'Kraft, Ausdauer, Beweglichkeit: bei dir ist alles im Gleichgewicht.' };
   if (close(second[1])) {
@@ -622,12 +722,22 @@ export function isGameState(x: unknown): x is GameState {
 
 const builtInTitle = (id: string | undefined) => QUEST_POOL.find((q) => q.id === id)?.title;
 
+/** Current title of a built-in exercise, or of its easier variant. */
+const currentTitle = (id: string | undefined, easy: boolean | undefined) =>
+  (easy && id ? VARIANTS[id] : undefined) ?? builtInTitle(id);
+
 /** Exercise names can change between versions; saved days and fights follow the current names. */
 function retitleDay(d: DayLog): DayLog {
-  return { ...d, quests: d.quests.map((q) => ({ ...q, title: builtInTitle(q.templateId) ?? q.title })) };
+  return { ...d, quests: d.quests.map((q) => ({ ...q, title: currentTitle(q.templateId, q.easy) ?? q.title })) };
 }
 function retitleBattle(b: Battle): Battle {
-  return { ...b, phases: b.phases.map((p) => ({ ...p, title: (p.kind === 'exercise' && builtInTitle(p.exerciseId)) || p.title })) };
+  return { ...b, phases: b.phases.map((p) => ({ ...p, title: (p.kind === 'exercise' && currentTitle(p.exerciseId, p.easy)) || p.title })) };
+}
+
+/** Synced days from old saves lack the newer workout fields. */
+function normalizeHealthDay(h: Partial<HealthDay> | undefined): HealthDay {
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return { steps: n(h?.steps), runKm: n(h?.runKm), bikeMin: n(h?.bikeMin), swimMin: n(h?.swimMin), floors: n(h?.floors), strengthMin: n(h?.strengthMin) };
 }
 
 /** Fill in fields added after the first release so old saves keep working. */
@@ -640,13 +750,26 @@ export function normalize(s: GameState): GameState {
     seasons: Array.isArray(s.seasons) ? s.seasons : [],
     battles: Array.isArray(s.battles) ? s.battles.map(retitleBattle) : [],
     days: Object.fromEntries(Object.entries(s.days).map(([k, d]) => [k, retitleDay(d)])),
-    health: s.health && typeof s.health === 'object' ? { connected: !!s.health.connected, lastSync: s.health.lastSync, days: s.health.days ?? {} } : { connected: false, days: {} },
+    health:
+      s.health && typeof s.health === 'object'
+        ? {
+            connected: !!s.health.connected,
+            lastSync: s.health.lastSync,
+            days: Object.fromEntries(Object.entries(s.health.days ?? {}).map(([k, h]) => [k, normalizeHealthDay(h)])),
+          }
+        : { connected: false, days: {} },
+    reading: { books: Array.isArray(s.reading?.books) ? s.reading.books.map(normalizeBook) : [] },
   };
+}
+
+/** Books from older versions may miss newer fields. */
+function normalizeBook(b: Book): Book {
+  return { ...b, lastPage: Number.isFinite(b.lastPage) ? b.lastPage : 0, log: Array.isArray(b.log) ? b.log : [] };
 }
 
 // ---------- health auto-complete ----------
 
-/** Tick off today's step and running quests that the synced health data already covers. */
+/** Tick off today's health-proof quests (steps, runs, cycling, …) that the synced data already covers. */
 export function autoCompleteFromHealth(state: GameState, today: string): GameState {
   const h = state.health.connected ? state.health.days[today] : undefined;
   const day = state.days[today];
@@ -654,7 +777,8 @@ export function autoCompleteFromHealth(state: GameState, today: string): GameSta
   let changed = false;
   const quests = day.quests.map((q) => {
     if (q.done) return q;
-    const reached = (q.templateId === 'steps' && h.steps >= q.amount) || (q.templateId === 'run' && h.runKm >= q.amount);
+    const proof = proofFor(q, state.customQuests);
+    const reached = proof.kind === 'health' && metricValue(h, proof.metric) >= q.amount;
     if (!reached) return q;
     changed = true;
     return { ...q, done: true };
@@ -662,5 +786,8 @@ export function autoCompleteFromHealth(state: GameState, today: string): GameSta
   return changed ? { ...state, days: { ...state.days, [today]: { ...day, quests } } } : state;
 }
 
-/** Quests that health data can tick off automatically. */
-export const isTrackedQuest = (templateId: string) => templateId === 'steps' || templateId === 'run';
+/** Quests that health data ticks off automatically (proof kind 'health'). */
+export function isTrackedQuest(templateId: string, customQuests: QuestTemplate[] = []): boolean {
+  const unit = customQuests.find((t) => t.id === templateId)?.unit ?? '';
+  return proofFor({ templateId, unit, amount: 0 }, customQuests).kind === 'health';
+}

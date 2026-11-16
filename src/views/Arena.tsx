@@ -8,13 +8,13 @@ import {
   enemiesOf,
   hpLeft,
   phaseProgress,
-  quickAmounts,
   weekStart,
   type Battle,
   type BattlePhase,
 } from '../battle';
 import { ATTR_LABEL, BOSS_ATTR_POINTS, ENEMY_ATTR_POINTS, QUEST_POOL, addDays, daysBetween, formatDate, type QuestAttr } from '../game';
-import { isScannable } from '../pose';
+import { PRESENCE, SCANNABLE } from '../pose';
+import { phaseProof, scanTarget, scanToAmount } from '../proof';
 import type { Game } from '../store';
 import { AttrTile, Icon } from './Icons';
 import { Scanner } from './Scanner';
@@ -98,6 +98,16 @@ export function ArenaView({ game, today }: { game: Game; today: string }) {
   );
 }
 
+/** What the player has to do for a phase: health data, or a camera scan for the rest. */
+type ScanPlan = { phase: BattlePhase; scanId: string; target: number; perUnit?: number };
+
+/** Scan result (reps, or seconds for holds / stretch / presence) in the phase's own unit. */
+function toPhaseUnit(p: BattlePhase, scanned: number, timed: boolean): number {
+  if (!timed) return scanned;
+  if (p.unit === 'Min.') return Math.round((scanned / 60) * 100) / 100;
+  return scanned; // 'Sek.'
+}
+
 function BattleView({ battle: b, game, today }: { battle: Battle; game: Game; today: string }) {
   const health = game.state.health.connected ? game.state.health.days : null;
   const status = battleStatus(b, today);
@@ -105,15 +115,26 @@ function BattleView({ battle: b, game, today }: { battle: Battle; game: Game; to
   const hp = Math.round(hpLeft(b, health) * maxHp);
   const [hit, setHit] = useState(0);
   const [hitText, setHitText] = useState('');
-  const [scanPhase, setScanPhase] = useState<BattlePhase | null>(null);
+  const [scan, setScan] = useState<ScanPlan | null>(null);
 
   const attack = (phase: BattlePhase, amount: number) => {
     const before = phaseProgress(b, phase, health);
-    const dealt = Math.round((Math.min(before + amount, phase.target) - Math.min(before, phase.target)) / phase.target * HP_PER_PHASE);
+    const dealt = Math.round(((Math.min(before + amount, phase.target) - Math.min(before, phase.target)) / phase.target) * HP_PER_PHASE);
     game.hit(b.id, phase.id, amount);
     setHit((n) => n + 1);
     setHitText(`−${Math.max(dealt, 1)}`);
     navigator.vibrate?.(40);
+  };
+
+  /** Open the camera for what is left of a phase. */
+  const startScan = (p: BattlePhase) => {
+    const remaining = Math.max(p.target - phaseProgress(b, p, health), 0);
+    const proof = phaseProof(p, remaining);
+    if (proof.kind === 'camera') {
+      setScan({ phase: p, scanId: proof.scanId, target: scanTarget(proof, remaining), perUnit: proof.perUnit });
+    } else if (proof.kind === 'presence') {
+      setScan({ phase: p, scanId: PRESENCE, target: proof.seconds });
+    }
   };
 
   const daysLeft = daysBetween(today, b.end);
@@ -189,31 +210,33 @@ function BattleView({ battle: b, game, today }: { battle: Battle; game: Game; to
                 phase={p}
                 active={p.id === firstOpen}
                 progress={phaseProgress(b, p, health)}
-                fromHealth={!!health && p.kind !== 'exercise'}
+                health={game.state.health.connected ? 'connected' : game.health.supported ? 'off' : 'browser'}
                 hasToday={p.log.some((l) => l.date === today)}
-                cameraOnly={!!game.state.profile?.cameraRequired}
-                onAttack={(n) => attack(p, n)}
-                onCamera={() => setScanPhase(p)}
+                onCamera={() => startScan(p)}
                 onUndo={() => game.undoHit(b.id, p.id)}
               />
             ))}
           </ul>
-          <p className="cmd-hint">Trag ein, was du gemacht hast. Jede Wiederholung trifft.</p>
+          <p className="cmd-hint">Jeder Treffer braucht einen Nachweis: Die Kamera zählt mit, Schritte und Training kommen aus Samsung Health.</p>
         </div>
       )}
 
-      {scanPhase && (
+      {scan && (
         <Scanner
-          exerciseId={scanPhase.exerciseId!}
-          title={`${scanPhase.title} gegen ${b.name}`}
-          target={Math.max(1, Math.ceil(scanPhase.target - phaseProgress(b, scanPhase, health)))}
-          unit={scanPhase.unit}
-          allowManual={false}
+          exerciseId={scan.scanId}
+          title={`${scan.phase.title} gegen ${b.name}`}
+          target={scan.target}
+          unit={scan.phase.unit}
+          easy={!!scan.phase.easy}
+          perUnit={scan.perUnit}
+          allowPartial
           onDone={(n) => {
-            if (n > 0) attack(scanPhase, n);
-            setScanPhase(null);
+            const timed = scan.scanId === PRESENCE || SCANNABLE[scan.scanId]?.kind === 'hold';
+            const dmg = timed ? toPhaseUnit(scan.phase, n, timed) : scanToAmount(scan, n);
+            if (dmg > 0) attack(scan.phase, dmg);
+            setScan(null);
           }}
-          onClose={() => setScanPhase(null)}
+          onClose={() => setScan(null)}
         />
       )}
     </div>
@@ -224,19 +247,17 @@ function Move(props: {
   phase: BattlePhase;
   active: boolean;
   progress: number;
-  fromHealth: boolean;
+  health: 'connected' | 'off' | 'browser';
   hasToday: boolean;
-  cameraOnly: boolean;
-  onAttack: (n: number) => void;
   onCamera: () => void;
   onUndo: () => void;
 }) {
-  const { phase: p, active, progress, fromHealth, hasToday, cameraOnly, onAttack, onCamera, onUndo } = props;
-  const scannable = p.kind === 'exercise' && isScannable(p.exerciseId);
-  const manual = !(scannable && cameraOnly);
+  const { phase: p, active, progress, health, hasToday, onCamera, onUndo } = props;
+  const proof = phaseProof(p);
+  const fromHealth = proof.kind === 'health';
   const done = progress >= p.target;
   const rest = Number(Math.max(p.target - progress, 0).toFixed(1));
-  const fmt = (n: number) => n.toLocaleString('de-DE');
+  const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
 
   return (
     <li className={`move attr-${phaseAttr(p)} ${done ? 'done' : ''} ${active ? 'active' : ''}`}>
@@ -259,29 +280,25 @@ function Move(props: {
       <div className="phase-bar">
         <span style={{ width: `${Math.min(progress / p.target, 1) * 100}%` }} />
       </div>
-      {fromHealth && !done && <p className="move-note">Kommt automatisch aus Samsung Health.</p>}
+      {fromHealth && !done && (
+        <p className="move-note health">
+          <Icon name="heart" size={16} />
+          <span>
+            Kommt automatisch aus Samsung Health
+            {health === 'connected'
+              ? `: ${fmt(progress)} von ${fmt(p.target)} ${p.unit}.`
+              : health === 'off'
+                ? '. Verbinde es unter Optionen.'
+                : '. Das geht nur in der Android-App.'}
+          </span>
+        </p>
+      )}
       {!done && !fromHealth && (
         <div className="attacks">
-          {scannable && (
-            <button className="attack camera" onClick={onCamera}>
-              <Icon name="camera" size={18} />
-              Kamera
-            </button>
-          )}
-          {manual &&
-            quickAmounts(p.unit)
-              .filter((n) => n < rest)
-              .slice(0, scannable ? 2 : 3)
-              .map((n) => (
-                <button key={n} className="attack" onClick={() => onAttack(n)}>
-                  +{fmt(n)}
-                </button>
-              ))}
-          {manual && (
-            <button className="attack finish" onClick={() => onAttack(rest)}>
-              Alle {fmt(rest)}
-            </button>
-          )}
+          <button className="attack camera" onClick={onCamera}>
+            <Icon name={proof.kind === 'presence' ? 'timer' : 'camera'} size={18} />
+            Mit Kamera angreifen
+          </button>
         </div>
       )}
       {hasToday && !fromHealth && (

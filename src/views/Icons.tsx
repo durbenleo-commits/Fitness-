@@ -32,6 +32,7 @@ const P: Record<string, JSX.Element> = {
   ausdauer: <path d="M2 12h4l3-7 5 14 3-7h5" />,
   beweglichkeit: <path d="M3 15c3-6 6-6 9 0s6 6 9 0M3 9c3-6 6-6 9 0" />,
   disziplin: <path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3zM9 12l2 2 4-4" />,
+  intelligenz: <path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5c-3.5-.5-6.5 0-8.5 1.5zM12 6.5v13" />,
   // actions and state
   flame: <path d="M12 21c-4 0-7-3-7-7 0-4 4-6 4-10 3 2 5 5 5 8 1-1 2-3 2-4 2 2 3 4 3 6 0 4-3 7-7 7zM12 21c-2 0-3-1.5-3-3 0-2 3-4 3-4s3 2 3 4c0 1.5-1 3-3 3z" />,
   swap: <path d="M4 8h13l-3-3M20 16H7l3 3" />,
@@ -44,6 +45,22 @@ const P: Record<string, JSX.Element> = {
       <circle cx="12" cy="13" r="3.5" />
     </>
   ),
+  // proof kinds
+  timer: (
+    <>
+      <circle cx="12" cy="13.5" r="7.5" />
+      <path d="M12 9.5v4l2.5 2M9.5 2.5h5M12 2.5V6M18.5 6.5l1.5-1.5" />
+    </>
+  ),
+  heart: <path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20zM7.5 12.5h2.2l1.4-2.5 2 4.5 1.4-2H16.5" />,
+  photo: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2.5" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="M21 15l-5-5-8.5 9" />
+    </>
+  ),
+  undo: <path d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />,
   lock: (
     <>
       <rect x="5" y="11" width="14" height="10" rx="2" />
@@ -78,6 +95,7 @@ const P: Record<string, JSX.Element> = {
   horns: <path d="M4 4c1 6 4 9 8 9s7-3 8-9M12 13v2M8 20a4 4 0 0 1 8 0" />,
   steps: <path d="M8 3c2 0 3 2 3 5s-1 4-3 4-3-1-3-4 1-5 3-5zM6 15h4v1.5a2 2 0 0 1-4 0zM16 7c2 0 3 2 3 5s-1 4-3 4-3-1-3-4 1-5 3-5zM14 19h4v.5a2 2 0 0 1-4 0z" />,
   flag: <path d="M5 21V4M5 4h12l-2 4 2 4H5" />,
+  book: <path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5c-3.5-.5-6.5 0-8.5 1.5zM12 6.5v13" />,
   // equipment
   tree: <path d="M12 21v-5M12 3l6 8h-3l4 5H5l4-5H6z" />,
   stairs: <path d="M3 20h5v-5h5v-5h5V5h3" />,
@@ -125,12 +143,13 @@ export function Icon({ name, size = 24, className }: { name: IconName; size?: nu
 
 // ---------- 3D badge ----------
 
-export type Tone = 'staerke' | 'ausdauer' | 'beweglichkeit' | 'disziplin' | 'bronze' | 'silver' | 'gold' | 'hp' | 'neutral' | 'locked';
+export type Tone = 'staerke' | 'ausdauer' | 'beweglichkeit' | 'intelligenz' | 'disziplin' | 'bronze' | 'silver' | 'gold' | 'hp' | 'neutral' | 'locked';
 
 const TONES: Record<Tone, string> = {
   staerke: '#ff6b5b',
   ausdauer: '#3fc9bd',
   beweglichkeit: '#a985f2',
+  intelligenz: '#5aa9ff',
   disziplin: '#ffc93c',
   bronze: '#d4874d',
   silver: '#a9b4cf',

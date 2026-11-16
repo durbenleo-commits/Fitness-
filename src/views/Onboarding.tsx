@@ -9,10 +9,12 @@ export function Onboarding({ onStart }: { onStart: (p: Profile) => void }) {
   const [seasonDays, setSeasonDays] = useState(66);
   const [equipment, setEquipment] = useState<Equipment[]>(DEFAULT_EQUIPMENT);
   const [noJumping, setNoJumping] = useState(false);
+  const [easyVariants, setEasyVariants] = useState(false);
+  const [reading, setReading] = useState(true);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    onStart({ name: name.trim() || 'Held', difficulty, seasonDays, startDate: toDateKey(new Date()), equipment, noJumping });
+    onStart({ name: name.trim() || 'Held', difficulty, seasonDays, startDate: toDateKey(new Date()), equipment, noJumping, easyVariants, reading });
   };
 
   return (
@@ -59,6 +61,28 @@ export function Onboarding({ onStart }: { onStart: (p: Profile) => void }) {
           }}
         />
       </fieldset>
+
+      <fieldset className="field">
+        <legend>Was soll dazugehören?</legend>
+        <label className="check">
+          <input type="checkbox" checked={easyVariants} onChange={(e) => setEasyVariants(e.target.checked)} />
+          <span>
+            Leichtere Varianten
+            <small>Zum Beispiel Knie-Liegestütze oder Australische Klimmzüge. Für alle, die einfacher einsteigen wollen.</small>
+          </span>
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={reading} onChange={(e) => setReading(e.target.checked)} />
+          <span>
+            Lesen als tägliche Quest
+            <small>Jeden Tag ein paar Seiten, mit einem Foto der Seite als Nachweis. Bringt Intelligenz.</small>
+          </span>
+        </label>
+      </fieldset>
+
+      <p className="small-text">
+        Jede Quest braucht einen Nachweis: Die Kamera zählt deine Wiederholungen, Schritte und Training kommen aus Samsung Health.
+      </p>
 
       <button className="primary" type="submit">
         Saison starten

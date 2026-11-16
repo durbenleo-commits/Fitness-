@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   ATTR_LABEL,
+  READ_QUEST,
   addDays,
   attributes,
   bestStreak,
@@ -17,16 +18,23 @@ import {
   type Attr,
   type GameState,
 } from '../game';
-import { Badge3D } from './Icons';
+import type { Game } from '../store';
+import { ReadingSheet } from './Reading';
+import { currentBook, finishedBooks, totalPagesRead, type Book } from '../reading';
+import { Badge3D, Icon } from './Icons';
 import { Segmented } from './ui';
 
-const ATTR_ORDER: Attr[] = ['staerke', 'ausdauer', 'beweglichkeit', 'disziplin'];
+const ATTR_ORDER: Attr[] = ['staerke', 'ausdauer', 'beweglichkeit', 'intelligenz', 'disziplin'];
 const CHART_DAYS = 14;
 
-export function StatsView({ state, today, xp }: { state: GameState; today: string; xp: number }) {
+// Reading is shown in the Bücher section with the pages really read, not as quest amounts.
+const notReading = (e: { templateId: string }) => e.templateId !== READ_QUEST;
+
+export function StatsView({ game, today, xp }: { game: Game; today: string; xp: number }) {
+  const { state } = game;
   const attrs = attributes(state);
   const last28 = useMemo(() => Array.from({ length: 28 }, (_, i) => addDays(today, i - 27)), [today]);
-  const exercises = exerciseTotals(state);
+  const exercises = exerciseTotals(state).filter(notReading);
   const [compare, setCompare] = useState<'week' | 'start'>('week');
   const start = state.profile?.startDate ?? today;
   const baseline = attributes(state, until(compare === 'week' ? addDays(today, -7) : start));
@@ -114,6 +122,8 @@ export function StatsView({ state, today, xp }: { state: GameState; today: strin
         </div>
       </dl>
 
+      <Books game={game} today={today} />
+
       <History state={state} today={today} />
 
       <h2>Letzte 4 Wochen</h2>
@@ -192,7 +202,7 @@ export function StatsView({ state, today, xp }: { state: GameState; today: strin
 /** Bar chart of the last 14 days: XP, or the amount of one exercise. */
 function History({ state, today }: { state: GameState; today: string }) {
   const dates = useMemo(() => Array.from({ length: CHART_DAYS }, (_, i) => addDays(today, i - (CHART_DAYS - 1))), [today]);
-  const exercises = exerciseTotals(state);
+  const exercises = exerciseTotals(state).filter(notReading);
   const [metric, setMetric] = useState<string>('xp');
   const [selected, setSelected] = useState<number | null>(null);
 
@@ -269,5 +279,82 @@ function History({ state, today }: { state: GameState; today: string }) {
       </svg>
       <p className="small-text">Tippe auf einen Balken, um den Wert des Tages zu sehen.</p>
     </div>
+  );
+}
+
+const pagesOf = (b: Book) => b.log.reduce((s, l) => s + (l.to - l.from), 0);
+
+/** Reading log: the book on the nightstand, finished books, pages overall. */
+function Books({ game, today }: { game: Game; today: string }) {
+  const { state } = game;
+  const [sheet, setSheet] = useState<'log' | 'new' | null>(null);
+  const book = currentBook(state);
+  const done = finishedBooks(state);
+  const total = totalPagesRead(state);
+  if (!book && done.length === 0) {
+    return (
+      <>
+        <h2>Bücher</h2>
+        <p className="small-text">Noch kein Buch angefangen. Trag dein Buch ein und halte danach fest, wie weit du gekommen bist.</p>
+        <button className="secondary" onClick={() => setSheet('new')}>
+          Buch anfangen
+        </button>
+        {sheet && <ReadingSheet game={game} today={today} startNew onClose={() => setSheet(null)} />}
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="books-head">
+        <h2>Bücher</h2>
+        <span className="books-total">
+          <span className="display">{total.toLocaleString('de-DE')}</span> Seiten gelesen
+        </span>
+      </div>
+      {book && (
+        <div className="book-card big attr-intelligenz">
+          {book.photo ? (
+            <img className="page-thumb" src={book.photo} alt={`Letztes Foto aus „${book.title}“`} />
+          ) : (
+            <span className="page-thumb empty" aria-hidden>
+              <Icon name="book" size={26} />
+            </span>
+          )}
+          <span className="book-info">
+            <span className="book-label">Liest gerade</span>
+            <strong>{book.title}</strong>
+            <span>
+              Seite {book.lastPage} · seit {formatDate(book.startedOn)}
+            </span>
+          </span>
+        </div>
+      )}
+      <div className="books-actions">
+        {book && (
+          <button className="primary" onClick={() => setSheet('log')}>
+            Seiten eintragen
+          </button>
+        )}
+        <button className="secondary" onClick={() => setSheet('new')}>
+          Buch anfangen
+        </button>
+      </div>
+      {sheet && <ReadingSheet game={game} today={today} startNew={sheet === 'new'} onClose={() => setSheet(null)} />}
+      {done.length > 0 && (
+        <ul className="book-list">
+          {[...done].reverse().map((b) => (
+            <li key={b.id}>
+              <Badge3D icon="book" tone="intelligenz" size={30} />
+              <span className="ql-text">
+                <strong>{b.title}</strong>
+                <span>
+                  Fertig am {formatDate(b.finishedOn!, { day: 'numeric', month: 'short', year: 'numeric' })} · {pagesOf(b).toLocaleString('de-DE')} Seiten
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }

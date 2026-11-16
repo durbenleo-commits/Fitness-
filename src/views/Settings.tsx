@@ -6,7 +6,9 @@ import {
   MAX_DAILY_QUESTS,
   QUEST_ATTRS,
   QUEST_POOL,
+  READ_QUEST,
   isGameState,
+  readingOn,
   makeCustomQuest,
   toDateKey,
   unavailableReason,
@@ -14,9 +16,10 @@ import {
   type QuestAttr,
 } from '../game';
 import type { Game } from '../store';
-import { SCANNABLE } from '../pose';
-import { AttrTile } from './Icons';
-import { EquipmentPicker, Segmented } from './ui';
+import { SCANNABLE, STRETCH } from '../pose';
+import { proofFor } from '../proof';
+import { AttrTile, Icon } from './Icons';
+import { EquipmentPicker, Segmented, proofName } from './ui';
 
 export function SettingsView({ game }: { game: Game }) {
   const { state } = game;
@@ -68,7 +71,11 @@ export function SettingsView({ game }: { game: Game }) {
 
       <GearSection game={game} />
 
-      <CameraSection game={game} />
+      <VariantsSection game={game} />
+
+      <ReadingSection game={game} />
+
+      <ProofSection />
 
       <HealthSection game={game} />
 
@@ -163,7 +170,8 @@ function CustomQuests({ game }: { game: Game }) {
               <span className="ql-text">
                 <strong>{q.title}</strong>
                 <span>
-                  {q.base.toLocaleString('de-DE')} {q.unit}, {ATTR_LABEL[q.attr]}, {q.daily ? 'jeden Tag' : 'zufällig'}
+                  {q.base.toLocaleString('de-DE')} {q.unit}, {ATTR_LABEL[q.attr]}, {q.daily ? 'jeden Tag' : 'zufällig'},{' '}
+                  {proofName(proofFor({ templateId: q.id, unit: q.unit, amount: q.base }, state.customQuests))}
                 </span>
               </span>
               <button
@@ -230,7 +238,10 @@ function CustomQuests({ game }: { game: Game }) {
               Quest anlegen
             </button>
           </div>
-          <small className="small-text">Eigene Quests bringen 30 XP und werden nicht automatisch schwerer.</small>
+          <small className="small-text">
+            Eigene Quests bringen 30 XP und werden nicht automatisch schwerer. Nachweis: Quests in Schritten kommen aus Samsung Health, alle
+            anderen laufen als Kamera-Zeit (Minuten wie angegeben, eine Wiederholung zählt 3 Sekunden, ein Satz 1 Minute, ein Kilometer 6 Minuten).
+          </small>
         </form>
       ) : (
         <button className="secondary" disabled={full} onClick={() => setOpen(true)}>
@@ -248,15 +259,18 @@ function BuiltInQuests({ game }: { game: Game }) {
       <legend>Übungen im Zufallspool</legend>
       <p className="small-text">Schalte Übungen aus, die du nicht machen kannst oder willst. Gilt ab morgen.</p>
       <ul className="quest-list">
-        {QUEST_POOL.filter((q) => !q.retired).map((q) => {
+        {QUEST_POOL.filter((q) => !q.retired && (q.id !== READ_QUEST || readingOn(state.profile))).map((q) => {
           const reason = q.fixed ? 'Jeden Tag fest dabei' : unavailableReason(q, state.profile);
+          const proof = proofName(proofFor({ templateId: q.id, unit: q.unit, amount: q.base }));
           const enabled = !reason && !state.disabledQuests.includes(q.id);
           return (
             <li key={q.id} className={`attr-${q.attr} ${enabled ? '' : 'off'}`}>
               <AttrTile attr={q.attr} size="sm" />
               <label className="ql-text switch-label" htmlFor={`q-${q.id}`}>
                 <strong>{q.title}</strong>
-                <span>{reason ?? ATTR_LABEL[q.attr]}</span>
+                <span>
+                  {reason ?? ATTR_LABEL[q.attr]} · {proof}
+                </span>
               </label>
               <input
                 id={`q-${q.id}`}
@@ -284,7 +298,8 @@ function HealthSection({ game }: { game: Game }) {
       <div className="field">
         <span>Samsung Health</span>
         <p className="small-text">
-          Schritte und Läufe aus Samsung Health kann nur die Android-App lesen, nicht die Browser-Version. Lade die neueste APK unter
+          Schritte, Läufe, Radfahren, Schwimmen, Stockwerke und Krafttraining aus Samsung Health kann nur die Android-App lesen, nicht die
+          Browser-Version. Lade die neueste APK unter
           „Releases“ im GitHub-Repository herunter und installiere sie. Dein Fortschritt zieht über „Backup speichern“ und „Backup laden“ mit.
         </p>
       </div>
@@ -297,7 +312,8 @@ function HealthSection({ game }: { game: Game }) {
       {state.health.connected ? (
         <>
           <p className="small-text">
-            Verbunden über Health Connect. Schritt- und Lauf-Quests haken sich selbst ab, und deine Schritte und Läufe treffen Gegner automatisch.
+            Verbunden über Health Connect. Schritte, Läufe, Radfahren, Schwimmen, Stockwerke und Krafttraining haken ihre Quests selbst ab
+            und treffen Gegner automatisch.
             {last && ` Zuletzt abgeglichen: ${last.toLocaleString('de-DE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.`}
           </p>
           <div className="row">
@@ -312,8 +328,9 @@ function HealthSection({ game }: { game: Game }) {
       ) : (
         <>
           <p className="small-text">
-            So geht's: Öffne Samsung Health, tippe auf ⋮ → Einstellungen → Health Connect und erlaube Samsung Health, Schritte und Training zu teilen.
-            Danach hier verbinden und Questfit den Lesezugriff erlauben.
+            Schritte, Läufe, Radfahren, Schwimmen, Stockwerke und Krafttraining zählen nur über Samsung Health. So geht's: Öffne Samsung
+            Health, tippe auf ⋮ → Einstellungen → Health Connect und erlaube Samsung Health, Schritte und Training zu teilen. Danach hier
+            verbinden und Questfit den Lesezugriff erlauben.
           </p>
           <button className="primary" onClick={health.connect}>
             Mit Health Connect verbinden
@@ -365,26 +382,100 @@ function GearSection({ game }: { game: Game }) {
   );
 }
 
-function CameraSection({ game }: { game: Game }) {
+function VariantsSection({ game }: { game: Game }) {
   const profile = game.state.profile!;
-  const names = Object.keys(SCANNABLE)
-    .map((id) => QUEST_POOL.find((q) => q.id === id)?.title)
-    .filter(Boolean)
-    .join(', ');
+  const nothingDoneToday = !game.state.days[toDateKey(new Date())]?.quests.some((q) => q.done);
   return (
     <div className="field">
-      <span>Kamera-Zähler</span>
-      <p className="small-text">
-        Bei {names} zählt die Kamera mit. Tippe die Quest an, stell das Handy so auf, dass du ganz zu sehen bist, und leg los. Die Bilder
-        bleiben auf dem Handy und werden nirgends gespeichert.
-      </p>
+      <span>Übungen</span>
       <label className="check">
-        <input type="checkbox" checked={!!profile.cameraRequired} onChange={(e) => game.updateProfile({ cameraRequired: e.target.checked })} />
+        <input
+          type="checkbox"
+          checked={!!profile.easyVariants}
+          onChange={(e) => {
+            game.updateProfile({ easyVariants: e.target.checked });
+            game.applyToToday();
+          }}
+        />
         <span>
-          Kamera-Pflicht
-          <small>Diese Übungen lassen sich dann nur noch vor der Kamera abhaken, auch gegen Gegner. Probier die Erkennung vorher einmal aus.</small>
+          Leichtere Varianten
+          <small>
+            Zum Beispiel Knie-Liegestütze statt Liegestütze oder Australische Klimmzüge statt Klimmzüge. Für alle, die einfacher einsteigen
+            wollen. Menge und XP bleiben gleich, die Kamera prüft die leichtere Ausführung.{' '}
+            {nothingDoneToday ? 'Gilt sofort.' : 'Gilt ab morgen, weil heute schon etwas erledigt ist.'}
+          </small>
         </span>
       </label>
+    </div>
+  );
+}
+
+function ReadingSection({ game }: { game: Game }) {
+  const on = readingOn(game.state.profile);
+  return (
+    <div className="field">
+      <span>Lesen</span>
+      <label className="check">
+        <input type="checkbox" checked={on} onChange={(e) => game.setReading(e.target.checked)} />
+        <span>
+          Lesen als tägliche Quest
+          <small>Jeden Tag ein paar Seiten. Nachweis ist ein Foto der Seite, bis zu der du gekommen bist. Bringt Intelligenz.</small>
+        </span>
+      </label>
+    </div>
+  );
+}
+
+/** How each kind of quest is proven. Proof is always required. */
+function ProofSection() {
+  const names = (ids: string[]) =>
+    ids
+      .map((id) => QUEST_POOL.find((q) => q.id === id)?.title)
+      .filter(Boolean)
+      .join(', ');
+  const camera = names(Object.keys(SCANNABLE).filter((id) => id !== STRETCH));
+  return (
+    <div className="field">
+      <span>Nachweise</span>
+      <p className="small-text">Jede Quest und jeder Treffer in der Arena braucht einen Nachweis. Abhaken von Hand gibt es nicht.</p>
+      <ul className="proof-list">
+        <li>
+          <Icon name="camera" size={20} />
+          <span>
+            <strong>Kamera zählt</strong>
+            {camera}.
+          </span>
+        </li>
+        <li>
+          <Icon name="camera" size={20} />
+          <span>
+            <strong>Dehn-Routine</strong>
+            Dehnen, Dehnen mit Band, Mobilisation und Hüftöffner: fünf Dehnungen, jede 30 Sekunden vor der Kamera halten.
+          </span>
+        </li>
+        <li>
+          <Icon name="timer" size={20} />
+          <span>
+            <strong>Kamera-Zeit</strong>
+            Seilspringen und eigene Quests: Die Zeit läuft nur, solange du im Bild bist.
+          </span>
+        </li>
+        <li>
+          <Icon name="heart" size={20} />
+          <span>
+            <strong>Samsung Health</strong>
+            Schritte, Laufen, Radfahren, Schwimmen, Treppen und Gerätetraining.
+          </span>
+        </li>
+        <li>
+          <Icon name="book" size={20} />
+          <span>
+            <strong>Foto der Seite</strong>
+            Lesen: die Seite fotografieren, bis zu der du gekommen bist.
+          </span>
+        </li>
+      </ul>
+      <p className="small-text">Die Kamerabilder bleiben auf dem Handy und werden nirgends gespeichert. Nur das letzte Seitenfoto pro Buch wird klein gespeichert.</p>
     </div>
   );
 }

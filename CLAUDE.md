@@ -6,11 +6,21 @@ Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf E
 ## Was die App ist
 
 - Tägliche Sport-Quests mit XP, Level, Rängen, Serie und Saison (30/66/90 Tage).
-- Feste Tagesquest „Schritte“ plus drei Zufalls-Quests (Stärke, Ausdauer, Beweglichkeit).
-- Arena: bis zu 3 Gegner pro Tag, Wochen-Boss (Mo–So, drei Phasen). Treffer = erledigte Wiederholungen.
+- Feste Tagesquest „Schritte“ plus drei Zufalls-Quests (Stärke, Ausdauer, Beweglichkeit), dazu „Lesen“ (abschaltbar).
+- Arena: bis zu 3 Gegner pro Tag, Wochen-Boss (Mo–So, 3–4 Phasen, immer mit einer Schritte-Phase). Treffer = per Kamera
+  gezählte Wiederholungen/Zeit oder Daten aus Samsung Health.
 - Erfolge (Bronze/Silber/Gold), Werte mit Klasse (Krieger, Läufer, …) und Vergleich 7 Tage / seit Tag 1.
 - Ausrüstung und Möglichkeiten (Hanteln, Schwimmbad, „keine Sprungübungen“ …) steuern, welche Übungen kommen.
-- Kamera-Zähler (MediaPipe Pose, läuft nur auf dem Handy) und Samsung Health über Health Connect (Schritte, Läufe).
+- Kamera-Zähler (MediaPipe Pose, läuft nur auf dem Handy) und Samsung Health über Health Connect (Schritte, Läufe,
+  Radfahren, Schwimmen, Stockwerke, Krafttraining).
+- **Nachweis-Pflicht:** Jede Quest und jeder Arena-Treffer braucht einen Nachweis (`proof.ts`): Kamera zählt (Wiederholungen,
+  Halten), Dehn-Routine (5 Dehnungen à 30 s vor der Kamera), Kamera-Zeit (Zeit läuft nur, solange man im Bild ist),
+  Samsung Health (hakt automatisch ab) oder Foto der Seite (Lesen). Kein Abhaken von Hand.
+- Lesen als feste Tagesquest (abschaltbar): Buch anlegen, Seite mit Foto eintragen, letzte Seite gespeichert, Buch beenden.
+  Bringt das Attribut Intelligenz (Klasse „Gelehrter“).
+- Leichtere Varianten (Knie-Liegestütze, Australische Klimmzüge …) über `Profile.easyVariants`; die Kamera prüft dann die
+  leichtere Ausführung.
+- Offene Punkte und nächste Schritte stehen in `OFFEN.md`.
 
 ## Technik
 
@@ -42,13 +52,16 @@ Vor jedem Push: `npm test` und `npm run build` müssen grün sein.
 ## Aufbau
 
 ```
-src/game.ts          Spielregeln: Quests, Level, Serie, Saison, Ausrüstung, Spielstand-Migration (normalize)
+src/game.ts          Spielregeln: Quests, Level, Serie, Saison, Ausrüstung, Varianten, Spielstand-Migration (normalize)
+src/proof.ts         Welcher Nachweis gilt für welche Quest / Arena-Phase (Kamera, Kamera-Zeit, Samsung Health, Foto)
+src/reading.ts       Bücher, Seiten pro Tag, Lese-Quest (nur über logPages mit Foto)
 src/battle.ts        Gegner, Bosse, Wellen, Schaden, Sieg
-src/pose.ts          Wiederholungen zählen aus Körperpunkten (rein, getestet)
+src/pose.ts          Wiederholungen, Halten, Dehn-Routine und Kamera-Zeit aus Körperpunkten (rein, getestet)
 src/achievements.ts  Erfolge
 src/store.ts         React-State, Speichern, Health-Connect-Abgleich
 src/health.ts        Brücke zu Health Connect (nur Android)
-src/views/           Bildschirme: Today, Arena, Stats, Achievements, Settings, Scanner, Onboarding, ui
+src/views/           Bildschirme: Today, Arena, Stats, Achievements, Settings, Scanner, Reading, Onboarding, ui
+src/views/Reading.tsx  Lese-Sheet: Buch anlegen, Seite + Foto eintragen, Buch beenden
 src/views/Icons.tsx  Linien-Icons und 3D-Abzeichen
 src/views/Sprites.tsx  die 14 Monster als SVG
 src/styles.css       Design („Clay Arena“), Farben als CSS-Variablen in :root

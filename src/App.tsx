@@ -83,7 +83,7 @@ export default function App() {
           />
         )}
         {tab === 'arena' && <ArenaView game={game} today={today} />}
-        {tab === 'werte' && <StatsView state={state} today={today} xp={xp} />}
+        {tab === 'werte' && <StatsView game={game} today={today} xp={xp} />}
         {tab === 'erfolge' && <AchievementsView list={achievements} />}
         {tab === 'einstellungen' && <SettingsView game={game} />}
       </main>

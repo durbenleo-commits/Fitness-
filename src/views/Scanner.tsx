@@ -1,8 +1,21 @@
-// Camera rep counter: the phone watches you and counts the reps itself.
+// Camera proof: the phone watches you and counts reps, hold time, the stretch routine or
+// plain time in view (presence mode).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PoseLandmarker } from '@mediapipe/tasks-vision';
-import { SCANNABLE, initialScan, scanAmount, step, type Point, type ScanState } from '../pose';
+import {
+  PRESENCE,
+  STRETCH,
+  STRETCH_POSES,
+  STRETCH_POSE_MS,
+  initialScan,
+  scanAmount,
+  scanSpec,
+  step,
+  type Point,
+  type ScanState,
+} from '../pose';
 import { Icon } from './Icons';
+import { fmtTime } from './ui';
 
 // Pairs of landmarks to draw as the skeleton.
 const BONES: [number, number][] = [
@@ -38,18 +51,28 @@ function loadLandmarker(): Promise<PoseLandmarker> {
 
 type Status = 'loading' | 'running' | 'error';
 
+/**
+ * Full-screen camera proof. `exerciseId` is a scan id: an exercise from SCANNABLE, the
+ * stretch routine (STRETCH) or presence mode (PRESENCE). `target` is in the scan's own
+ * unit: reps, or seconds for holds, the stretch routine and presence mode.
+ * With `allowPartial` (arena) the player may hand back less than the target.
+ */
 export function Scanner(props: {
   exerciseId: string;
   title: string;
   target: number;
   unit: string;
-  allowManual: boolean;
+  easy?: boolean;
+  perUnit?: number; // counted reps per unit of `unit` (lunges: 2 per leg), shown next to the target
+  allowPartial?: boolean;
   onDone: (amount: number) => void;
-  onManual?: () => void;
   onClose: () => void;
 }) {
-  const { exerciseId, title, target, unit, allowManual, onDone, onManual, onClose } = props;
-  const spec = SCANNABLE[exerciseId];
+  const { exerciseId, title, target, unit, easy = false, perUnit = 1, allowPartial = false, onDone, onClose } = props;
+  const spec = scanSpec(exerciseId, easy)!;
+  const presence = exerciseId === PRESENCE;
+  const stretch = exerciseId === STRETCH;
+  const timed = spec.kind !== 'reps'; // amount and target are seconds
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanRef = useRef<ScanState>(initialScan(exerciseId));
@@ -85,6 +108,10 @@ export function Scanner(props: {
           audio: false,
         });
         const video = videoRef.current!;
+        if (stopped) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         video.srcObject = stream;
         await video.play();
         const landmarker = await loadLandmarker();
@@ -103,7 +130,7 @@ export function Scanner(props: {
               lm = res.landmarks[0]?.map((p) => ({ x: p.x, y: p.y, visibility: p.visibility }));
             });
             const aspect = v.videoWidth / (v.videoHeight || 1);
-            scanRef.current = step(scanRef.current, lm, now, aspect);
+            scanRef.current = step(scanRef.current, lm, now, aspect, easy);
             setScan(scanRef.current);
             draw(canvas, v, lm);
           }
@@ -128,7 +155,7 @@ export function Scanner(props: {
       cancelAnimationFrame(raf);
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, [facing]);
+  }, [facing, easy]);
 
   // Reaching the target: short celebration, then hand the result back.
   useEffect(() => {
@@ -138,28 +165,49 @@ export function Scanner(props: {
     return () => window.clearTimeout(t);
   }, [done, finish, target]);
 
-  // A small buzz for every counted rep.
+  // A small buzz for every counted rep, and when the stretch routine moves to the next pose.
   const lastReps = useRef(0);
   useEffect(() => {
     if (scan.reps > lastReps.current) navigator.vibrate?.(25);
     lastReps.current = scan.reps;
   }, [scan.reps]);
+  const lastPose = useRef(scan.poseIndex);
+  useEffect(() => {
+    if (scan.poseIndex !== lastPose.current) navigator.vibrate?.([40, 30, 40]);
+    lastPose.current = scan.poseIndex;
+  }, [scan.poseIndex]);
 
   const statusText =
     status === 'loading'
       ? 'Kamera startet …'
-      : !scan.bodyVisible
-        ? 'Stell dich so hin, dass du ganz zu sehen bist'
-        : spec.kind === 'hold'
-          ? scan.inPosition
-            ? 'Halten!'
-            : 'Geh in Position'
-          : scan.phase === 'down'
-            ? 'Und wieder hoch'
-            : 'Los geht’s';
+      : presence
+        ? scan.bodyVisible
+          ? 'Zeit läuft, bleib im Bild'
+          : 'Bleib gut sichtbar im Bild'
+        : !scan.bodyVisible
+          ? 'Stell dich so hin, dass du ganz zu sehen bist'
+          : spec.kind === 'hold'
+            ? scan.inPosition
+              ? 'Halten!'
+              : stretch
+                ? 'Geh in die Dehnung'
+                : 'Geh in Position'
+            : scan.phase === 'down'
+              ? 'Und wieder hoch'
+              : 'Los geht’s';
+
+  const pose = stretch ? STRETCH_POSES[scan.poseIndex ?? 0] : undefined;
+  const poseSec = Math.min(Math.floor((scan.poseMs ?? 0) / 1000), STRETCH_POSE_MS / 1000);
+  const shownAmount = presence || stretch ? fmtTime(amount) : String(amount);
+  const shownTarget =
+    presence || stretch
+      ? fmtTime(target)
+      : perUnit > 1 && !timed
+        ? `${target} (${Math.ceil(target / perUnit)} ${unit})`
+        : `${target} ${timed ? 'Sek.' : unit}`;
 
   return (
-    <div className="scanner" role="dialog" aria-modal="true" aria-label={`${title} mit Kamera zählen`}>
+    <div className="scanner" role="dialog" aria-modal="true" aria-label={`${title} mit Kamera nachweisen`}>
       <div className={`scanner-stage ${facing === 'user' ? 'mirrored' : ''}`}>
         <video ref={videoRef} playsInline muted />
         <canvas ref={canvasRef} />
@@ -181,11 +229,7 @@ export function Scanner(props: {
       {status === 'error' ? (
         <div className="scanner-panel">
           <p>{error}</p>
-          {allowManual && onManual && (
-            <button className="secondary" onClick={onManual}>
-              Ohne Kamera abhaken
-            </button>
-          )}
+          <p className="small-text">Ohne Kamera gibt es keinen Nachweis. Versuch es noch einmal, wenn die Kamera geht.</p>
           <button className="primary" onClick={onClose}>
             Zurück
           </button>
@@ -193,25 +237,42 @@ export function Scanner(props: {
       ) : (
         <footer className="scanner-bottom">
           {status === 'loading' && <p className="scanner-setup">{spec.setup}</p>}
+          {pose && status === 'running' && !done && (
+            <div className={`pose-card ${scan.inPosition ? 'holding' : ''}`}>
+              <div className="pose-head">
+                <span className="pose-step">
+                  Dehnung {(scan.poseIndex ?? 0) + 1}/{STRETCH_POSES.length}
+                </span>
+                <strong>{pose.name}</strong>
+                <span className="pose-time display">
+                  {poseSec}/{STRETCH_POSE_MS / 1000} s
+                </span>
+              </div>
+              <p>{pose.hint}</p>
+              <span className="pose-bar" aria-hidden>
+                <span style={{ width: `${(poseSec / (STRETCH_POSE_MS / 1000)) * 100}%` }} />
+              </span>
+            </div>
+          )}
           <div className={`scanner-count ${done ? 'done' : ''}`}>
-            <span className="display big-count">{amount}</span>
+            <span className="display big-count">{shownAmount}</span>
             <span className="of">
-              von {target} {spec.kind === 'hold' ? 'Sek.' : unit}
+              von {shownTarget}
+              {stretch && <small>Gesamtzeit</small>}
             </span>
           </div>
           <p className={`scanner-status ${scan.bodyVisible ? 'ok' : ''}`} aria-live="polite">
             {done ? 'Geschafft!' : statusText}
           </p>
-          <div className="row">
-            {allowManual && onManual && (
-              <button className="secondary" onClick={onManual}>
-                Ohne Kamera
-              </button>
-            )}
-            <button className="primary grow" onClick={() => finish(Math.min(amount, target))} disabled={amount === 0}>
-              {amount === 0 ? 'Noch nichts gezählt' : `${amount} übernehmen`}
+          {allowPartial ? (
+            <button className="primary" onClick={() => finish(Math.min(amount, target))} disabled={amount === 0}>
+              {amount === 0 ? 'Noch nichts gezählt' : `${shownAmount}${timed ? '' : ' Treffer'} übernehmen`}
             </button>
-          </div>
+          ) : (
+            <p className="scanner-note">
+              {done ? 'Quest wird abgehakt …' : `Die Quest hakt sich ab, sobald ${timed ? 'die Zeit erreicht ist' : 'alle Wiederholungen gezählt sind'}.`}
+            </p>
+          )}
         </footer>
       )}
     </div>

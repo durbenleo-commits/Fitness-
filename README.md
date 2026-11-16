@@ -7,7 +7,7 @@ Die App ist eine **PWA** (Progressive Web App). Sie läuft im Browser und lässt
 ## Funktionen
 
 - Charakter mit Name, Fitness-Stufe und Saison-Länge (30, 66 oder 90 Tage)
-- Täglich vier Quests: je eine für Stärke, Ausdauer und Beweglichkeit, dazu eine zufällige
+- Täglich die Schritte-Quest und drei Zufalls-Quests (Stärke, Ausdauer, Beweglichkeit), dazu auf Wunsch Lesen
 - XP, Level, Ränge und ein Level-up-Bildschirm
 - Quests werden mit jedem Level etwas schwerer
 - Serie (Tage in Folge mit allen Quests) und 50 Bonus-XP pro geschafftem Tag
@@ -17,11 +17,20 @@ Die App ist eine **PWA** (Progressive Web App). Sie läuft im Browser und lässt
 - Funktioniert offline
 - Eigene Quests anlegen, z. B. Klimmzüge oder Radfahren, auf Wunsch jeden Tag
 - Übungen, die du nicht machen willst, ausschalten
-- 18 Erfolge, z. B. „Eine Woche“ (7 Tage in Folge) oder „50 Kilometer“
+- 27 Erfolge, z. B. „Eine Woche“ (7 Tage in Folge) oder „50 Kilometer“
 - Verlauf der letzten 2 Wochen als Diagramm und Summen pro Übung
-- Arena: jeden Tag ein Gegner, jede Woche ein Boss mit drei Phasen. Besiegt wird er mit Sport
-- Kamera-Zähler: Liegestütze, Kniebeugen, Ausfallschritte, Hampelmänner, Klimmzüge, Unterarmstütz und Wandsitzen zählt die Kamera mit (Pose-Erkennung läuft komplett auf dem Handy)
-- Android-App: Schritte und Läufe aus Samsung Health (über Health Connect) zählen automatisch
+- Arena: jeden Tag bis zu drei Gegner, jede Woche ein Boss mit 3–4 Phasen, immer mit einer Schritte-Phase. Besiegt wird er mit Sport
+- Nachweis-Pflicht: Jede Quest und jeder Treffer braucht einen Nachweis, Abhaken von Hand gibt es nicht
+  - Kamera-Zähler: Liegestütze, Kniebeugen, Ausfallschritte, Hampelmänner, Klimmzüge, Unterarmstütz, Wandsitzen, Bauchpressen,
+    Bizepsbeugen, Schulterdrücken, Rudern, Kugelhantel-Schwünge, Hockstrecksprünge und Bergsteiger zählt die Kamera mit
+    (Pose-Erkennung läuft komplett auf dem Handy)
+  - Dehn-Routine: Dehnen, Dehnen mit Band, Mobilisation und Hüftöffner als fünf Dehnungen, jede 30 Sekunden vor der Kamera gehalten
+  - Kamera-Zeit: Seilspringen und eigene Quests zählen nur, solange man im Bild ist
+  - Samsung Health (Android-App, über Health Connect): Schritte, Laufen, Radfahren, Schwimmen, Treppen und Gerätetraining
+    haken sich selbst ab und treffen Gegner automatisch
+- Leichtere Varianten auf Wunsch, z. B. Knie-Liegestütze oder Australische Klimmzüge
+- Lesen als tägliche Quest (abschaltbar): Seite mit Foto nachweisen, letzte Seite wird gespeichert, Bücher als beendet markieren.
+  Bringt das Attribut Intelligenz (Klasse „Gelehrter“) und eigene Erfolge
 - Am Ende der Saison eine Auswertung und der Start einer neuen Saison (Level und XP bleiben)
 
 ## Auf dem Handy installieren
@@ -53,7 +62,8 @@ Kostenloses Hosting über GitHub Pages gibt es nur für **öffentliche** Reposit
 ## Wichtig zu wissen
 
 - Der Fortschritt liegt **nur auf deinem Handy** (im Browser-Speicher). Wenn du die Browserdaten löschst, ist er weg. Speichere in den Einstellungen regelmäßig ein Backup.
-- Die App prüft nicht, ob du die Übungen wirklich gemacht hast.
+- Quests zählen nur mit Nachweis (Kamera, Foto oder Samsung Health). Kamerabilder bleiben auf dem Handy; gespeichert wird nur das
+  letzte, kleine Seitenfoto pro Buch.
 
 ## Weiterarbeiten am Handy und PC
 

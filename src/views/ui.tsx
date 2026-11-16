@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import type { Battle } from '../battle';
-import { Badge3D, type IconName } from './Icons';
+import type { HealthMetric, Proof, ProofKind } from '../proof';
+import { Badge3D, Icon, type IconName } from './Icons';
 import { Sprite } from './Sprites';
 import { ATTR_LABEL, BOSS_ATTR_POINTS, DEFAULT_EQUIPMENT, ENEMY_ATTR_POINTS, EQUIPMENT, rankFor, type Equipment } from '../game';
 
@@ -105,3 +106,63 @@ export function EquipmentPicker(props: {
     </>
   );
 }
+
+/** Bottom sheet over the current screen. Tapping the dimmed area closes it. */
+export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="overlay sheet-overlay" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <header className="sheet-head">
+          <strong>{title}</strong>
+          <button type="button" className="sheet-close" onClick={onClose} aria-label="Schließen">
+            <Icon name="close" size={20} />
+          </button>
+        </header>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Glyph for how a quest is proven. */
+export const PROOF_ICON: Record<ProofKind, IconName> = {
+  camera: 'camera',
+  presence: 'timer',
+  health: 'heart',
+  photo: 'book',
+};
+
+/** Short German name of a proof kind, for lists. */
+export const PROOF_LABEL: Record<ProofKind, string> = {
+  camera: 'Kamera zählt',
+  presence: 'Kamera-Zeit',
+  health: 'Samsung Health',
+  photo: 'Foto der Seite',
+};
+
+/** Short German name of how a quest is proven; the stretch routine gets its own name. */
+export const proofName = (p: Proof) => (p.kind === 'camera' && p.scanId === 'stretch' ? 'Dehn-Routine' : PROOF_LABEL[p.kind]);
+
+/** What to record in Samsung Health so a health quest counts. */
+export const METRIC_HINT: Record<HealthMetric, string> = {
+  steps: 'Dein Handy oder deine Uhr zählt die Schritte von selbst.',
+  runKm: 'Zeichne deinen Lauf in Samsung Health als Training „Laufen“ auf.',
+  bikeMin: 'Zeichne die Fahrt in Samsung Health als Training „Radfahren“ auf.',
+  swimMin: 'Zeichne das Schwimmen in Samsung Health als Training auf, z. B. mit deiner Uhr.',
+  floors: 'Dein Handy oder deine Uhr zählt die Stockwerke von selbst.',
+  strengthMin: 'Zeichne das Training in Samsung Health als Krafttraining auf.',
+};
+
+/** Seconds as m:ss. */
+export function fmtTime(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** A number in German style, with at most one decimal. */
+export const fmtNum = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });

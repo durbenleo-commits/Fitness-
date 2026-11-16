@@ -1,6 +1,7 @@
 // Enemies and bosses: pure logic, unit-tested.
 import {
   QUEST_POOL,
+  VARIANTS,
   addDays,
   battlePool,
   daysBetween,
@@ -10,10 +11,11 @@ import {
   type QuestAttr,
   type QuestTemplate,
 } from './game';
+import { metricValue, phaseProof, type HealthMetric } from './proof';
 
 export type MoveKind = 'exercise' | 'steps' | 'run';
 
-interface MoveSpec {
+export interface MoveSpec {
   kind: MoveKind;
   exerciseId?: string; // for kind 'exercise': id from QUEST_POOL
   base: number; // amount at level 1, difficulty 2
@@ -45,7 +47,7 @@ export const ENEMIES: EnemyTemplate[] = [
   { id: 'zucker-kobold', name: 'Zucker-Kobold', icon: '🍬', attr: 'staerke', taunt: 'Ein Riegel geht noch.', moves: [ex('lunges', 12), ex('wallsit', 45)] },
 ];
 
-/** Weekly bosses: three phases, Monday to Sunday. */
+/** Weekly bosses: three phases, Monday to Sunday (plus a steps phase if they have none, see bossMoves). */
 export const BOSSES: EnemyTemplate[] = [
   { id: 'schweinehund', name: 'Der innere Schweinehund', icon: '🐗', attr: 'staerke', taunt: 'Ich kenne all deine Ausreden.', moves: [ex('pushups', 80), steps(40000), ex('plank', 180)] },
   { id: 'montags-monster', name: 'Das Montags-Monster', icon: '👹', attr: 'ausdauer', taunt: 'Die Woche gehört mir.', moves: [ex('squats', 150), run(5), ex('stretch', 30)] },
@@ -68,6 +70,7 @@ export interface BattlePhase {
   unit: string;
   target: number;
   log: LogEntry[];
+  easy?: boolean; // easier variant (title from VARIANTS); missing = normal
 }
 
 export interface Battle {
@@ -90,6 +93,11 @@ export interface Battle {
 export interface HealthDay {
   steps: number;
   runKm: number;
+  // Added later: missing in old saves (normalize fills 0), read with metricValue().
+  bikeMin?: number; // cycling workouts, minutes
+  swimMin?: number; // swimming workouts, minutes
+  floors?: number; // floors climbed
+  strengthMin?: number; // strength workouts, minutes
 }
 
 // ---------- generation ----------
@@ -132,7 +140,7 @@ function adaptMove(move: MoveSpec, attr: QuestAttr, pool: QuestTemplate[], rand:
   return { kind: 'exercise', exerciseId: t.id, base: (move.base / original.base) * t.base };
 }
 
-function makePhase(move: MoveSpec, level: number, difficulty: Difficulty, factor: number, idx: number): BattlePhase {
+function makePhase(move: MoveSpec, level: number, difficulty: Difficulty, factor: number, idx: number, easy = false): BattlePhase {
   if (move.kind === 'steps') {
     // Steps and distance scale with difficulty only: level-based growth would get unrealistic.
     return { id: `p${idx}`, kind: 'steps', title: 'Schritte', icon: '👣', unit: 'Schritte', target: roundTo(move.base * DIFF_ONLY[difficulty] * factor, 500), log: [] };
@@ -141,15 +149,17 @@ function makePhase(move: MoveSpec, level: number, difficulty: Difficulty, factor
     return { id: `p${idx}`, kind: 'run', title: 'Laufen', icon: '🏃', unit: 'km', target: roundTo(move.base * DIFF_ONLY[difficulty] * factor, 0.5), log: [] };
   }
   const t = QUEST_POOL.find((q) => q.id === move.exerciseId)!;
+  const variant = easy ? VARIANTS[t.id] : undefined;
   return {
     id: `p${idx}`,
     kind: 'exercise',
     exerciseId: t.id,
-    title: t.title,
+    title: variant ?? t.title,
     icon: t.icon,
     unit: t.unit,
     target: roundTo(move.base * scaleFactor(level, difficulty) * factor, t.step),
     log: [],
+    ...(variant ? { easy: true } : {}),
   };
 }
 
@@ -177,6 +187,7 @@ export function generateEnemy(
   pool: QuestTemplate[] = QUEST_POOL,
   wave = 1,
   avoid: string[] = [],
+  easy = false,
 ): Battle {
   const rand = mulberry32(hash('enemy' + date + (wave > 1 ? `#${wave}` : '')));
   let idx = Math.floor(rand() * ENEMIES.length);
@@ -197,7 +208,7 @@ export function generateEnemy(
     start: date,
     end: date,
     xp: Math.round((40 + 4 * level) * (elite ? 1.6 : 1) * WAVE_XP[wave - 1]),
-    phases: e.moves.map((m, i) => makePhase(adaptMove(m, e.attr, pool, rand), level, difficulty, factor, i)),
+    phases: e.moves.map((m, i) => makePhase(adaptMove(m, e.attr, pool, rand), level, difficulty, factor, i, easy)),
   };
 }
 
@@ -213,7 +224,24 @@ export function bossAvailable(date: string): boolean {
   return daysBetween(date, addDays(weekStart(date), 6)) >= 3;
 }
 
-export function generateBoss(date: string, level: number, difficulty: Difficulty, pool: QuestTemplate[] = QUEST_POOL): Battle {
+/** Steps per week for the extra steps phase of bosses without one (difficulty 2). */
+export const BOSS_STEPS_BASE = 35000;
+
+/**
+ * A boss's moves for a new fight: every boss has exactly one steps phase (Samsung Health
+ * proof). Bosses without one get it appended as an extra phase.
+ */
+export function bossMoves(b: EnemyTemplate): MoveSpec[] {
+  return b.moves.some((m) => m.kind === 'steps') ? b.moves : [...b.moves, steps(BOSS_STEPS_BASE)];
+}
+
+export function generateBoss(
+  date: string,
+  level: number,
+  difficulty: Difficulty,
+  pool: QuestTemplate[] = QUEST_POOL,
+  easy = false,
+): Battle {
   const start = weekStart(date);
   const rand = mulberry32(hash('boss' + start));
   const b = BOSSES[Math.floor(rand() * BOSSES.length)];
@@ -229,7 +257,7 @@ export function generateBoss(date: string, level: number, difficulty: Difficulty
     start: date,
     end: addDays(start, 6),
     xp: 200 + 15 * level,
-    phases: dedupe(b.moves.map((m) => adaptMove(m, b.attr, pool, rand))).map((m, i) => makePhase(m, level, difficulty, 1, i)),
+    phases: dedupe(bossMoves(b).map((m) => adaptMove(m, b.attr, pool, rand))).map((m, i) => makePhase(m, level, difficulty, 1, i, easy)),
   };
 }
 
@@ -248,12 +276,19 @@ function dedupe(moves: MoveSpec[]): MoveSpec[] {
 
 const inWindow = (b: Battle, date: string) => date >= b.start && date <= b.end;
 
+/** The synced metric a phase is proven by (steps, runs, and health-proof exercises like cycling), or null. */
+export function phaseMetric(p: BattlePhase): HealthMetric | null {
+  const proof = phaseProof(p);
+  return proof.kind === 'health' ? proof.metric : null;
+}
+
 /** Health-backed phases read from synced data when connected, otherwise from manual entries. */
 export function phaseProgress(b: Battle, p: BattlePhase, health: Record<string, HealthDay> | null): number {
-  if (health && p.kind !== 'exercise') {
+  const metric = health ? phaseMetric(p) : null;
+  if (health && metric) {
     let sum = 0;
     for (const [date, h] of Object.entries(health)) {
-      if (inWindow(b, date)) sum += p.kind === 'steps' ? h.steps : h.runKm;
+      if (inWindow(b, date)) sum += metricValue(h, metric);
     }
     return Number(sum.toFixed(2));
   }
@@ -295,41 +330,24 @@ export function undoDamage(b: Battle, phaseId: string, date: string): Battle {
   };
 }
 
-/** Quick-entry amounts per unit. */
-export function quickAmounts(unit: string): number[] {
-  switch (unit) {
-    case 'Sek.':
-      return [10, 30, 60];
-    case 'Min.':
-      return [1, 5, 10];
-    case 'km':
-      return [0.5, 1, 2];
-    case 'Schritte':
-      return [500, 1000, 5000];
-    case 'Stockwerke':
-      return [1, 3, 5];
-    default:
-      return [5, 10, 25];
-  }
-}
-
 /** Ensure today's enemy and this week's boss exist. Returns the same object if nothing changed. */
 export function ensureBattles(state: GameState, today: string, level: number): GameState {
   if (!state.profile) return state;
   const add: Battle[] = [];
   const has = (id: string) => state.battles.some((b) => b.id === id);
   const pool = battlePool(state);
+  const easy = !!state.profile.easyVariants;
   const todays = enemiesOf(state.battles, today);
   if (todays.length === 0) {
-    add.push(generateEnemy(today, level, state.profile.difficulty, pool));
+    add.push(generateEnemy(today, level, state.profile.difficulty, pool, 1, [], easy));
   } else {
     const last = todays[todays.length - 1];
     const wave = todays.length + 1;
     if (last.defeatedOn && wave <= ENEMIES_PER_DAY && !has(enemyId(today, wave))) {
-      add.push(generateEnemy(today, level, state.profile.difficulty, pool, wave, todays.map((b) => b.enemyId)));
+      add.push(generateEnemy(today, level, state.profile.difficulty, pool, wave, todays.map((b) => b.enemyId), easy));
     }
   }
-  if (bossAvailable(today) && !has(`boss-${weekStart(today)}`)) add.push(generateBoss(today, level, state.profile.difficulty, pool));
+  if (bossAvailable(today) && !has(`boss-${weekStart(today)}`)) add.push(generateBoss(today, level, state.profile.difficulty, pool, easy));
   return add.length ? { ...state, battles: [...state.battles, ...add] } : state;
 }
 
