@@ -140,6 +140,8 @@ export interface QuestInstance {
   xp: number;
   done: boolean;
   easy?: boolean; // easier variant (title from VARIANTS); missing = normal
+  extra?: boolean; // rotating optional quest ("Extra"); missing = required ("Pflicht")
+  achieved?: number; // amount actually done, in the quest's unit, up to 2× amount; missing = amount when done, 0 when not
 }
 
 /** German titles of the easier variants. Amount and XP stay the same. */
@@ -208,8 +210,10 @@ export interface HealthState {
   days: Record<string, HealthDay>;
 }
 
-/** Physical quests per day: the step goal plus three random ones. The reading quest comes on top. */
-export const QUESTS_PER_DAY = 4;
+/** Rotating optional quests per day ("Extra"). The fixed core quests and reading come on top. */
+export const EXTRA_QUESTS_PER_DAY = 4;
+/** A quest can be done beyond its amount up to this factor, for more XP. */
+export const MAX_ACHIEVE_FACTOR = 2;
 export const REROLLS_PER_DAY = 1;
 export const DAY_CLEAR_BONUS = 50;
 
@@ -360,7 +364,14 @@ export function scaledAmount(t: QuestTemplate, level: number, difficulty: Diffic
   return Math.max(t.step, Number(rounded.toFixed(1)));
 }
 
-function instantiate(t: QuestTemplate, level: number, difficulty: Difficulty, slot: number, easy = false): QuestInstance {
+function instantiate(
+  t: QuestTemplate,
+  level: number,
+  difficulty: Difficulty,
+  slot: number,
+  easy = false,
+  extra = false,
+): QuestInstance {
   const variant = easy && !t.custom ? VARIANTS[t.id] : undefined;
   return {
     id: `${t.id}-${slot}`,
@@ -373,13 +384,38 @@ function instantiate(t: QuestTemplate, level: number, difficulty: Difficulty, sl
     xp: t.xp,
     done: false,
     ...(variant ? { easy: true } : {}),
+    ...(extra ? { extra: true } : {}),
   };
 }
 
 /**
- * One quest per attribute (where the pool allows), filled up with random extras,
- * all different. QUESTS_PER_DAY counts physical quests only, so a fixed reading
- * quest comes on top. Daily custom quests are appended on top as well.
+ * The core quests ("Pflicht") of every day, in this order. They are always there: the
+ * disabled-quests setting does not apply to them, and they cannot be swapped. Steps grow with
+ * difficulty only, the others like normal quests. Reading comes after them while it is on.
+ */
+export const CORE_QUEST_IDS = ['steps', 'pushups', 'squats', 'plank'] as const;
+const CORE_IDS = new Set<string>(CORE_QUEST_IDS);
+export const isCoreQuest = (templateId: string) => CORE_IDS.has(templateId);
+
+/** Quests that are part of every day: the core quests, then reading. Never drawn as extras, never swapped. */
+export const FIXED_QUESTS: QuestTemplate[] = [
+  ...CORE_QUEST_IDS.map((id) => QUEST_POOL.find((q) => q.id === id)!),
+  QUEST_POOL.find((q) => q.id === READ_QUEST)!,
+];
+
+/** The fixed quests for this profile: the core quests, plus reading unless it is switched off. */
+export const fixedQuests = (profile: Profile | null | undefined) =>
+  FIXED_QUESTS.filter((q) => q.id !== READ_QUEST || readingOn(profile));
+
+/** Templates that may be handed out as a rotating extra quest. */
+const extraCandidate = (t: QuestTemplate) => !t.fixed && !t.retired && !CORE_IDS.has(t.id);
+
+/**
+ * A day: the fixed quests (core quests, reading) in fixed order, then EXTRA_QUESTS_PER_DAY
+ * rotating extras ("Extra", flagged `extra`), then daily custom quests. Extras are drawn from
+ * `pool`: one per physical attribute where the pool allows, filled up at random, all different
+ * and never one of the fixed quests. Extras are optional: they give XP and attribute points but
+ * are not needed to clear the day.
  */
 export function generateDay(
   date: string,
@@ -392,26 +428,56 @@ export function generateDay(
 ): DayLog {
   const rand = mulberry32(hash(date));
   const pick = (list: QuestTemplate[]) => list[Math.floor(rand() * list.length)];
-  const random = pool.filter((q) => !fixed.includes(q) && !q.fixed && !q.retired);
-  const chosen: QuestTemplate[] = [...fixed];
-  const physical = () => chosen.filter((q) => (QUEST_ATTRS as string[]).includes(q.attr)).length;
+  const fixedIds = new Set(fixed.map((t) => t.id));
+  const random = pool.filter((q) => extraCandidate(q) && !fixedIds.has(q.id));
+  const extras: QuestTemplate[] = [];
   for (const attr of QUEST_ATTRS) {
-    const options = random.filter((q) => q.attr === attr && !chosen.includes(q));
-    if (options.length > 0 && physical() < QUESTS_PER_DAY) chosen.push(pick(options));
+    const options = random.filter((q) => q.attr === attr && !extras.includes(q));
+    if (options.length > 0 && extras.length < EXTRA_QUESTS_PER_DAY) extras.push(pick(options));
   }
-  while (physical() < QUESTS_PER_DAY) {
-    const options = random.filter((t) => !chosen.includes(t));
+  while (extras.length < EXTRA_QUESTS_PER_DAY) {
+    const options = random.filter((t) => !extras.includes(t));
     if (options.length === 0) break;
-    chosen.push(pick(options));
+    extras.push(pick(options));
   }
+  const slots: [QuestTemplate, boolean][] = [
+    ...fixed.map((t) => [t, false] as [QuestTemplate, boolean]),
+    ...extras.map((t) => [t, true] as [QuestTemplate, boolean]),
+    ...daily.map((t) => [t, false] as [QuestTemplate, boolean]),
+  ];
   return {
     date,
-    quests: [...chosen, ...daily].map((t, i) => instantiate(t, level, difficulty, i, easy)),
+    quests: slots.map(([t, extra], i) => instantiate(t, level, difficulty, i, easy, extra)),
     rerollsUsed: 0,
   };
 }
 
-/** Swap one quest for a different one of the same attribute (or any, if none left). */
+/**
+ * A day made before core quests and rotating extras existed: it has no extra and does not hold
+ * all core quests. All its quests count as required, as they always did. A new day with 0 extras
+ * (every extra exercise switched off) still holds all core quests, so it is not legacy.
+ */
+export const isLegacyDay = (day: DayLog) =>
+  !day.quests.some((q) => q.extra) && !CORE_QUEST_IDS.every((id) => day.quests.some((q) => q.templateId === id));
+
+/** Required quests ("Pflicht"): everything that is not a rotating extra. Needed to clear the day. */
+export const requiredQuests = (day: DayLog | undefined): QuestInstance[] => (day ? day.quests.filter((q) => !q.extra) : []);
+
+/** Rotating optional quests ("Extra") of the day. Empty for legacy days. */
+export const extraQuests = (day: DayLog | undefined): QuestInstance[] => (day ? day.quests.filter((q) => q.extra) : []);
+
+/**
+ * Whether the swap joker may replace this quest (ignoring how many jokers are left): only open
+ * extras. Legacy days keep the old rule: anything but the step goal, reading and daily custom quests.
+ */
+export function isSwappable(day: DayLog, q: QuestInstance, customQuests: QuestTemplate[] = []): boolean {
+  if (q.done) return false;
+  if (!isLegacyDay(day)) return !!q.extra;
+  const pinned = QUEST_POOL.some((t) => t.fixed && t.id === q.templateId) || customQuests.some((t) => t.id === q.templateId && t.daily);
+  return !pinned;
+}
+
+/** Swap one extra quest for a different one of the same attribute (or any, if none left). */
 export function rerollQuest(
   day: DayLog,
   questId: string,
@@ -419,42 +485,95 @@ export function rerollQuest(
   difficulty: Difficulty,
   pool: QuestTemplate[] = QUEST_POOL,
   easy = false,
+  customQuests: QuestTemplate[] = [],
 ): DayLog {
   const idx = day.quests.findIndex((q) => q.id === questId);
-  if (idx < 0 || day.quests[idx].done || day.rerollsUsed >= REROLLS_PER_DAY) return day;
-  if (FIXED_QUESTS.some((t) => t.id === day.quests[idx].templateId)) return day;
-  const used = new Set(day.quests.map((q) => q.templateId));
+  if (idx < 0 || day.rerollsUsed >= REROLLS_PER_DAY) return day;
   const current = day.quests[idx];
-  let options = pool.filter((t) => t.attr === current.attr && !used.has(t.id));
-  if (options.length === 0) options = pool.filter((t) => !used.has(t.id));
+  if (!isSwappable(day, current, customQuests)) return day;
+  const legacy = isLegacyDay(day);
+  const used = new Set(day.quests.map((q) => q.templateId));
+  const candidates = pool.filter((t) => !used.has(t.id) && !t.fixed && !t.retired && (legacy || !CORE_IDS.has(t.id)));
+  let options = candidates.filter((t) => t.attr === current.attr);
+  if (options.length === 0) options = candidates;
   if (options.length === 0) return day;
   const rand = mulberry32(hash(day.date + questId) + day.rerollsUsed + 1);
   const t = options[Math.floor(rand() * options.length)];
   const quests = [...day.quests];
-  quests[idx] = { ...instantiate(t, level, difficulty, idx, easy), id: `${t.id}-${idx}-r${day.rerollsUsed + 1}` };
+  quests[idx] = { ...instantiate(t, level, difficulty, idx, easy, !!current.extra), id: `${t.id}-${idx}-r${day.rerollsUsed + 1}` };
   return { ...day, quests, rerollsUsed: day.rerollsUsed + 1 };
 }
 
-/** Mark a quest done. Callers make sure the proof (camera, presence timer) succeeded first. */
-export function completeQuest(day: DayLog, questId: string): DayLog {
-  const q = day.quests.find((x) => x.id === questId);
-  if (!q || q.done) return day;
-  return { ...day, quests: day.quests.map((x) => (x.id === questId ? { ...x, done: true } : x)) };
+// ---------- doing more than asked ----------
+
+/** The most a quest counts for: twice its amount. */
+export const maxAchieved = (q: Pick<QuestInstance, 'amount'>) => q.amount * MAX_ACHIEVE_FACTOR;
+
+/** Amount actually done, in the quest's unit: 0 when open, the amount when done without a value. */
+export const questAchieved = (q: Pick<QuestInstance, 'done' | 'amount' | 'achieved'>) =>
+  q.done ? (q.achieved ?? q.amount) : 0;
+
+/** A done result between the amount and twice the amount (rounded to 2 decimals). */
+function clampAchieved(q: Pick<QuestInstance, 'amount'>, value: number): number {
+  const v = Number.isFinite(value) ? value : q.amount;
+  return Number(Math.min(Math.max(v, q.amount), maxAchieved(q)).toFixed(2));
 }
 
-/** Undo a finished quest. Always allowed. */
+/** Done at twice the amount (or more): worth double XP and a bonus attribute point. */
+export const isDoubled = (q: Pick<QuestInstance, 'done' | 'amount' | 'achieved'>) =>
+  q.done && q.amount > 0 && questAchieved(q) >= maxAchieved(q) - 1e-9;
+
+/** XP for one quest: its XP scaled by how much was done, from 1× (the amount) up to 2×. */
+export function questXp(q: Pick<QuestInstance, 'done' | 'amount' | 'achieved' | 'xp'>): number {
+  if (!q.done) return 0;
+  const ratio = q.amount > 0 ? Math.min(questAchieved(q) / q.amount, MAX_ACHIEVE_FACTOR) : 1;
+  return Math.max(q.xp, Math.round(q.xp * ratio));
+}
+
+/** Every required quest of the day is done at twice its amount. */
+export function allDoubled(day: DayLog | undefined): boolean {
+  const req = requiredQuests(day);
+  return req.length > 0 && req.every(isDoubled);
+}
+
+/**
+ * Mark a quest done with what was achieved (default: its amount), clamped to amount..2×amount.
+ * Calling it again on a done quest with a higher value upgrades the result; it is never lowered.
+ * Callers make sure the proof (camera, presence timer) succeeded first.
+ */
+export function completeQuest(day: DayLog, questId: string, achieved?: number): DayLog {
+  const q = day.quests.find((x) => x.id === questId);
+  if (!q) return day;
+  const value = clampAchieved(q, achieved ?? q.amount);
+  if (q.done && value <= questAchieved(q)) return day;
+  return { ...day, quests: day.quests.map((x) => (x.id === questId ? { ...x, done: true, achieved: value } : x)) };
+}
+
+/** Undo a finished quest (and what was achieved). Always allowed. */
 export function uncheckQuest(day: DayLog, questId: string): DayLog {
   const q = day.quests.find((x) => x.id === questId);
   if (!q || !q.done) return day;
-  return { ...day, quests: day.quests.map((x) => (x.id === questId ? { ...x, done: false } : x)) };
+  return {
+    ...day,
+    quests: day.quests.map((x) => {
+      if (x.id !== questId) return x;
+      const { achieved: _drop, ...rest } = x;
+      return { ...rest, done: false };
+    }),
+  };
 }
 
-/** Quests that are part of every day (step goal, reading). Never drawn at random, never swapped. */
-export const FIXED_QUESTS = QUEST_POOL.filter((q) => q.fixed);
-
-/** The fixed quests for this profile: the step goal, plus reading unless it is switched off. */
-export const fixedQuests = (profile: Profile | null | undefined) =>
-  FIXED_QUESTS.filter((q) => q.id !== READ_QUEST || readingOn(profile));
+/**
+ * Set what was achieved on a done quest directly (clamped to amount..2×amount), also lower.
+ * For corrections such as taking back a page entry. Open quests stay unchanged.
+ */
+export function setAchieved(day: DayLog, questId: string, achieved: number): DayLog {
+  const q = day.quests.find((x) => x.id === questId);
+  if (!q || !q.done) return day;
+  const value = clampAchieved(q, achieved);
+  if (value === questAchieved(q)) return day;
+  return { ...day, quests: day.quests.map((x) => (x.id === questId ? { ...x, achieved: value } : x)) };
+}
 
 /** Today's quests built from the state's settings (pool, daily custom quests, reading, easy variants). */
 export function dayFor(state: GameState, date: string, level: number): DayLog {
@@ -462,9 +581,18 @@ export function dayFor(state: GameState, date: string, level: number): DayLog {
   return generateDay(date, level, p?.difficulty ?? 2, randomPool(state), dailyQuests(state), fixedQuests(p), !!p?.easyVariants);
 }
 
-/** A day made before a fixed quest existed (or before reading was on) and with nothing ticked gets rebuilt. */
+/** A fresh day from the current settings that keeps the swap jokers already used on that date. */
+export function rebuildDay(state: GameState, date: string, level: number): DayLog {
+  return { ...dayFor(state, date, level), rerollsUsed: state.days[date]?.rerollsUsed ?? 0 };
+}
+
+/**
+ * A day with nothing ticked gets rebuilt when it is missing a fixed quest (core quest, or reading
+ * once it is on) or was made before rotating extras existed.
+ */
 export function dayOutdated(day: DayLog | undefined, profile: Profile | null | undefined): boolean {
   if (!day || day.quests.some((q) => q.done)) return false;
+  if (isLegacyDay(day)) return true;
   return fixedQuests(profile).some((t) => !day.quests.some((q) => q.templateId === t.id));
 }
 
@@ -490,15 +618,28 @@ export function setReading(state: GameState, today: string, on: boolean): GameSt
   return next;
 }
 
-/** Pinned quests (the daily step goal, reading, daily custom quests) cannot be swapped. */
+/**
+ * Add a daily custom quest to a day. A day that is already cleared stays as it is (the quest
+ * starts tomorrow), because a new open required quest would take the clear away.
+ */
+export function addDailyQuestToDay(day: DayLog, t: QuestTemplate, difficulty: Difficulty): DayLog {
+  if (!t.daily || isCleared(day)) return day;
+  const quest = instantiate(t, 1, difficulty, day.quests.length);
+  return { ...day, quests: [...day.quests, quest] };
+}
+
+/** Pinned quests (core quests, reading, daily custom quests) cannot be swapped. See also isSwappable. */
 export const isDailyInstance = (state: Pick<GameState, 'customQuests'>, q: QuestInstance) =>
   FIXED_QUESTS.some((t) => t.id === q.templateId) ||
   !!state.customQuests.find((t) => t.id === q.templateId && t.daily);
 
 // ---------- derived stats ----------
 
-export const isCleared = (day: DayLog | undefined) =>
-  !!day && day.quests.length > 0 && day.quests.every((q) => q.done);
+/** All required quests are done. Extras do not count; legacy days (no extras) need every quest. */
+export const isCleared = (day: DayLog | undefined) => {
+  const req = requiredQuests(day);
+  return req.length > 0 && req.every((q) => q.done);
+};
 
 type DayFilter = (date: string) => boolean;
 const everyDay: DayFilter = () => true;
@@ -509,7 +650,7 @@ function daysWhere(state: GameState, filter: DayFilter): DayLog[] {
 }
 
 export const dayXp = (day: DayLog) =>
-  day.quests.reduce((s, q) => s + (q.done ? q.xp : 0), 0) + (isCleared(day) ? DAY_CLEAR_BONUS : 0);
+  day.quests.reduce((s, q) => s + questXp(q), 0) + (isCleared(day) ? DAY_CLEAR_BONUS : 0);
 
 export function totalXp(state: GameState, filter: DayFilter = everyDay): number {
   const quests = daysWhere(state, filter).reduce((s, d) => s + dayXp(d), 0);
@@ -523,7 +664,7 @@ export const BOSS_ATTR_POINTS = 5;
 export function attributes(state: GameState, filter: DayFilter = everyDay): Record<Attr, number> {
   const out: Record<Attr, number> = { staerke: 0, ausdauer: 0, beweglichkeit: 0, intelligenz: 0, disziplin: 0 };
   for (const day of daysWhere(state, filter)) {
-    for (const q of day.quests) if (q.done) out[q.attr] += 1;
+    for (const q of day.quests) if (q.done) out[q.attr] += isDoubled(q) ? 2 : 1; // +1 bonus at 2×
     if (isCleared(day)) out.disziplin += 1;
   }
   for (const b of state.battles) {
@@ -600,6 +741,16 @@ export function questsDone(state: GameState, filter: DayFilter = everyDay): numb
   return daysWhere(state, filter).reduce((n, d) => n + d.quests.filter((q) => q.done).length, 0);
 }
 
+/** Quests done at twice their amount. */
+export function questsDoubled(state: GameState, filter: DayFilter = everyDay): number {
+  return daysWhere(state, filter).reduce((n, d) => n + d.quests.filter(isDoubled).length, 0);
+}
+
+/** Days on which every required quest was done at twice its amount. */
+export function daysAllDoubled(state: GameState, filter: DayFilter = everyDay): number {
+  return daysWhere(state, filter).filter(allDoubled).length;
+}
+
 export interface ExerciseTotal {
   templateId: string;
   title: string;
@@ -626,7 +777,7 @@ export function exerciseTotals(state: GameState): ExerciseTotal[] {
         total: 0,
       };
       e.count += 1;
-      e.total = Number((e.total + q.amount).toFixed(1));
+      e.total = Number((e.total + questAchieved(q)).toFixed(1));
       map.set(q.templateId, e);
     }
   }
@@ -655,7 +806,7 @@ export function dailySeries(state: GameState, dates: string[], metric: 'xp' | st
       const battleXp = state.battles.reduce((s, b) => s + (b.defeatedOn === d ? b.xp : 0), 0);
       return (day ? dayXp(day) : 0) + battleXp;
     }
-    const questAmount = day ? day.quests.filter((q) => q.done && q.templateId === metric).reduce((s, q) => s + q.amount, 0) : 0;
+    const questAmount = day ? day.quests.filter((q) => q.done && q.templateId === metric).reduce((s, q) => s + questAchieved(q), 0) : 0;
     let battleAmount = 0;
     for (const b of state.battles)
       for (const p of b.phases)
@@ -728,7 +879,16 @@ const currentTitle = (id: string | undefined, easy: boolean | undefined) =>
 
 /** Exercise names can change between versions; saved days and fights follow the current names. */
 function retitleDay(d: DayLog): DayLog {
-  return { ...d, quests: d.quests.map((q) => ({ ...q, title: currentTitle(q.templateId, q.easy) ?? q.title })) };
+  return {
+    ...d,
+    quests: d.quests.map((q) => {
+      const { achieved, ...rest } = q;
+      const title = currentTitle(q.templateId, q.easy) ?? q.title;
+      // a broken backup must not turn XP into NaN: drop bad values, clamp the rest to 0..2x amount
+      if (typeof achieved !== 'number' || !Number.isFinite(achieved)) return { ...rest, title };
+      return { ...rest, title, achieved: Math.min(Math.max(achieved, 0), maxAchieved(q)) };
+    }),
+  };
 }
 function retitleBattle(b: Battle): Battle {
   return { ...b, phases: b.phases.map((p) => ({ ...p, title: (p.kind === 'exercise' && currentTitle(p.exerciseId, p.easy)) || p.title })) };
@@ -764,24 +924,38 @@ export function normalize(s: GameState): GameState {
 
 /** Books from older versions may miss newer fields. */
 function normalizeBook(b: Book): Book {
-  return { ...b, lastPage: Number.isFinite(b.lastPage) ? b.lastPage : 0, log: Array.isArray(b.log) ? b.log : [] };
+  const { cover, totalPages, ...rest } = b;
+  const lastPage = Number.isFinite(b.lastPage) ? b.lastPage : 0;
+  const pagesOk = typeof totalPages === 'number' && Number.isInteger(totalPages) && totalPages >= 1 && totalPages >= lastPage;
+  return {
+    ...rest,
+    lastPage,
+    log: Array.isArray(b.log) ? b.log : [],
+    ...(typeof cover === 'string' && cover ? { cover } : {}),
+    ...(pagesOk ? { totalPages } : {}),
+  };
 }
 
 // ---------- health auto-complete ----------
 
-/** Tick off today's health-proof quests (steps, runs, cycling, …) that the synced data already covers. */
+/**
+ * Tick off today's health-proof quests (steps, runs, cycling, …) that the synced data already
+ * covers, and keep what was achieved up to date as more data comes in (up to 2×, never lower).
+ */
 export function autoCompleteFromHealth(state: GameState, today: string): GameState {
   const h = state.health.connected ? state.health.days[today] : undefined;
   const day = state.days[today];
   if (!h || !day) return state;
   let changed = false;
   const quests = day.quests.map((q) => {
-    if (q.done) return q;
     const proof = proofFor(q, state.customQuests);
-    const reached = proof.kind === 'health' && metricValue(h, proof.metric) >= q.amount;
-    if (!reached) return q;
+    if (proof.kind !== 'health') return q;
+    const value = metricValue(h, proof.metric);
+    if (!q.done && value < q.amount) return q;
+    const achieved = clampAchieved(q, value);
+    if (q.done && achieved <= questAchieved(q)) return q;
     changed = true;
-    return { ...q, done: true };
+    return { ...q, done: true, achieved };
   });
   return changed ? { ...state, days: { ...state.days, [today]: { ...day, quests } } } : state;
 }

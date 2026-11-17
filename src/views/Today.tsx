@@ -6,11 +6,18 @@ import {
   REROLLS_PER_DAY,
   formatDate,
   bestStreak,
+  extraQuests,
   isCleared,
+  isDoubled,
+  isLegacyDay,
+  isSwappable,
+  maxAchieved,
+  questAchieved,
+  questXp,
   questsDone,
-  isDailyInstance,
   rankFor,
   READ_QUEST,
+  requiredQuests,
   seasonOver,
   seasonDay,
   summarizeSeason,
@@ -19,8 +26,8 @@ import {
   type QuestInstance,
 } from '../game';
 import type { Game } from '../store';
-import { PRESENCE } from '../pose';
-import { healthProgress, proofFor, scanTarget, type HealthMetric, type ProofKind } from '../proof';
+import { PRESENCE, STRETCH_FOCUS } from '../pose';
+import { healthProgress, proofFor, questMaxTarget, questTarget, scanToAchieved, type HealthMetric, type ProofKind } from '../proof';
 import { pagesReadOn } from '../reading';
 import { AttrTile, Badge3D, Icon } from './Icons';
 import { ReadingSheet } from './Reading';
@@ -70,10 +77,11 @@ export function Hud(props: { profile: Profile; level: number; intoLevel: number;
 
 /** The open proof flow on the Today screen. */
 type Flow =
-  | { kind: 'scan'; quest: QuestInstance; scanId: string; target: number; perUnit?: number }
+  // target and max (2×) are in the scanner's units; base is what already counts (doing more on a done quest)
+  | { kind: 'scan'; quest: QuestInstance; scanId: string; target: number; max: number; base: number; perUnit?: number }
   | { kind: 'health'; quest: QuestInstance; metric: HealthMetric }
   | { kind: 'read' }
-  | { kind: 'undo'; quest: QuestInstance };
+  | { kind: 'done'; quest: QuestInstance };
 
 export function TodayView({ game, today, onOpenArena }: { game: Game; today: string; onOpenArena: () => void }) {
   const { state } = game;
@@ -91,31 +99,94 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
   const close = useCallback(() => setFlow(null), []);
   const day = state.days[today];
   if (!day || !state.profile) return null;
-  const done = day.quests.filter((q) => q.done).length;
+  const custom = state.customQuests;
+  // Required quests ("Pflicht") decide the day bonus and the streak; extras are optional.
+  // Legacy days (made before extras existed) have no extras: everything is required.
+  const legacy = isLegacyDay(day);
+  const required = requiredQuests(day);
+  const extras = extraQuests(day);
+  const done = required.filter((q) => q.done).length;
+  const open = required.length - done;
+  const extrasDone = extras.filter((q) => q.done).length;
+  // tab badges count everything the lists show; the bonus text and day track use required only
+  const allDone = done + extrasDone;
+  const allOpen = required.length + extras.length - allDone;
   const cleared = isCleared(day);
-  const canReroll = day.rerollsUsed < REROLLS_PER_DAY;
+  const canSwap = day.rerollsUsed < REROLLS_PER_DAY && day.quests.some((q) => isSwappable(day, q, custom));
   const enemy = currentEnemy(state.battles, today);
   const dayNo = Math.min(seasonDay(state.profile, today), state.profile.seasonDays);
-  const open = day.quests.length - done;
   const wins = state.battles.filter((b) => b.defeatedOn).length;
-  const shown = day.quests.filter((q) => (filter === 'open' ? !q.done || justDone.includes(q.id) : q.done));
+  const visible = (q: QuestInstance) => (filter === 'open' ? !q.done || justDone.includes(q.id) : q.done);
   const mood =
-    done === 0 ? 'Neuer Tag, neue Quests. Fang mit der leichtesten an.' : open > 0 ? `Läuft. Noch ${open} ${open === 1 ? 'Quest' : 'Quests'} bis zum Bonus.` : 'Alles erledigt. Morgen geht es weiter.';
+    done === 0 && extrasDone === 0
+      ? 'Neuer Tag, neue Quests. Fang mit der leichtesten an.'
+      : open > 0
+        ? `Läuft. Noch ${open} ${open === 1 ? 'Quest' : 'Quests'} bis zum Bonus.`
+        : extrasDone < extras.length
+          ? 'Pflicht erledigt. Die Extras bringen noch mehr XP.'
+          : 'Alles erledigt. Morgen geht es weiter.';
 
-  /** Tapping a quest starts its proof; a done quest asks whether to take it back. */
+  /** Start the camera (or presence timer) for a quest; `more` continues a done quest towards 2×. */
+  const startScan = (q: QuestInstance, more = false) => {
+    const proof = proofFor(q, custom);
+    if (proof.kind !== 'camera' && proof.kind !== 'presence') return;
+    const target = questTarget(q, custom);
+    const max = questMaxTarget(q, custom);
+    const base = more && q.amount > 0 ? Math.min(max, Math.floor((target * questAchieved(q)) / q.amount + 1e-9)) : 0;
+    setFlow({
+      kind: 'scan',
+      quest: q,
+      scanId: proof.kind === 'camera' ? proof.scanId : PRESENCE,
+      target,
+      max,
+      base,
+      perUnit: proof.kind === 'camera' ? proof.perUnit : undefined,
+    });
+  };
+
+  /** Tapping a quest starts its proof; a done quest offers "more" (up to 2×) or taking it back. */
   const startProof = (q: QuestInstance) => {
-    if (q.done) return setFlow({ kind: 'undo', quest: q });
-    const proof = proofFor(q, state.customQuests);
+    if (q.done) return setFlow({ kind: 'done', quest: q });
+    const proof = proofFor(q, custom);
     switch (proof.kind) {
       case 'camera':
-        return setFlow({ kind: 'scan', quest: q, scanId: proof.scanId, target: scanTarget(proof, q.amount), perUnit: proof.perUnit });
       case 'presence':
-        return setFlow({ kind: 'scan', quest: q, scanId: PRESENCE, target: proof.seconds });
+        return startScan(q);
       case 'health':
         return setFlow({ kind: 'health', quest: q, metric: proof.metric });
       case 'photo':
         return setFlow({ kind: 'read' });
     }
+  };
+
+  const row = (q: QuestInstance) => {
+    const swappable = isSwappable(day, q, custom);
+    return (
+      <QuestRow
+        key={q.id}
+        quest={q}
+        swapMode={swapping}
+        swappable={swappable}
+        proof={proofFor(q, custom).kind}
+        note={questNote(state, today, q)}
+        onTap={() => {
+          if (!swapping) return startProof(q);
+          if (!swappable) return;
+          game.reroll(q.id);
+          setSwapping(false);
+        }}
+      />
+    );
+  };
+
+  const list = (quests: QuestInstance[], empty: string, extra = false) => {
+    const shown = quests.filter(visible);
+    return (
+      <ul className={`quests ${extra ? 'extras' : ''} ${swapping ? 'swapping' : ''}`}>
+        {shown.length === 0 && <li className="empty-list">{empty}</li>}
+        {shown.map(row)}
+      </ul>
+    );
   };
 
   return (
@@ -146,15 +217,15 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
 
       <div className="filter-tabs" role="tablist" aria-label="Quests filtern">
         <button role="tab" aria-selected={filter === 'open'} onClick={() => setFilter('open')}>
-          Offen <span>{open}</span>
+          Offen <span>{allOpen}</span>
         </button>
         <button role="tab" aria-selected={filter === 'done'} onClick={() => setFilter('done')}>
-          Erledigt <span>{done}</span>
+          Erledigt <span>{allDone}</span>
         </button>
       </div>
 
       <div className={`day-track ${cleared ? 'full' : ''}`} aria-hidden>
-        {day.quests.map((q) => (
+        {required.map((q) => (
           <span key={q.id} className={`seg attr-${q.attr} ${q.done ? 'on' : ''}`} />
         ))}
         <span className="day-bonus">
@@ -162,39 +233,40 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         </span>
       </div>
 
-      <ul className={`quests ${swapping ? 'swapping' : ''}`}>
-        {shown.length === 0 && (
-          <li className="empty-list">{filter === 'open' ? 'Keine offenen Quests mehr.' : 'Noch nichts erledigt. Los geht’s!'}</li>
-        )}
-        {shown.map((q) => {
-          const swappable = !q.done && !isDailyInstance(state, q);
-          const proof = proofFor(q, state.customQuests);
-          return (
-            <QuestRow
-              key={q.id}
-              quest={q}
-              swapMode={swapping}
-              swappable={swappable}
-              proof={proof.kind}
-              note={questNote(state, today, q)}
-              onTap={() => {
-                if (!swapping) return startProof(q);
-                if (!swappable) return;
-                game.reroll(q.id);
-                setSwapping(false);
-              }}
-            />
-          );
-        })}
-      </ul>
+      {legacy ? (
+        list(required, filter === 'open' ? 'Keine offenen Quests mehr.' : 'Noch nichts erledigt. Los geht’s!')
+      ) : (
+        <>
+          <div className="quest-section">
+            <h2>Pflicht</h2>
+            <span>Für Tagesbonus und Serie</span>
+          </div>
+          {list(required, filter === 'open' ? 'Alle Pflicht-Quests erledigt.' : 'Noch keine Pflicht-Quest erledigt. Los geht’s!')}
+          {extras.length > 0 && (
+            <>
+              <div className="quest-section extra">
+                <h2>
+                  Extra <span className="quest-section-count">{extrasDone}/{extras.length}</span>
+                </h2>
+                <span>Freiwillig – bringen zusätzliche XP</span>
+              </div>
+              {list(extras, filter === 'open' ? 'Alle Extras erledigt.' : 'Noch kein Extra erledigt.', true)}
+            </>
+          )}
+        </>
+      )}
 
       <div className="today-actions">
         {cleared ? (
           <p className="cleared">
             <span className="display">Tag geschafft</span>
-            <span>+{DAY_CLEAR_BONUS} Bonus-XP und +1 Disziplin. Morgen gibt es neue Quests.</span>
+            <span>
+              +{DAY_CLEAR_BONUS} Bonus-XP und +1 Disziplin.{' '}
+              {extrasDone < extras.length ? 'Extras und alles bis 2× bringen weiter XP.' : 'Morgen gibt es neue Quests.'}
+            </span>
           </p>
-        ) : swapping ? (
+        ) : null}
+        {swapping ? (
           <p className="hint">
             Tippe auf die Quest, die du tauschen willst.{' '}
             <button className="link-button" onClick={() => setSwapping(false)}>
@@ -203,14 +275,22 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
           </p>
         ) : (
           <>
-            <p className="hint">
-              Jede Quest braucht einen Nachweis: Die Kamera zählt mit, beim Lesen machst du ein Foto der Seite, Schritte und Training kommen
-              aus Samsung Health.
-            </p>
-            {canReroll && done < day.quests.length && (
-              <button className="joker" onClick={() => setSwapping(true)}>
+            {!cleared && (
+              <p className="hint">
+                Jede Quest braucht einen Nachweis: Die Kamera zählt mit, beim Lesen machst du ein Foto der Seite, Schritte und Training kommen
+                aus Samsung Health. Bis 2× gibt es mehr XP.
+              </p>
+            )}
+            {canSwap && (
+              <button
+                className="joker"
+                onClick={() => {
+                  setFilter('open');
+                  setSwapping(true);
+                }}
+              >
                 <Icon name="swap" size={18} />
-                Quest tauschen <span className="joker-count">1 Joker</span>
+                {legacy ? 'Quest tauschen' : 'Extra tauschen'} <span className="joker-count">1 Joker</span>
               </button>
             )}
           </>
@@ -222,13 +302,16 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
           exerciseId={flow.scanId}
           title={flow.quest.title}
           target={flow.target}
+          max={flow.max}
+          base={flow.base}
           unit={flow.quest.unit}
           easy={!!flow.quest.easy}
           perUnit={flow.perUnit}
-          onDone={(amount) => {
-            if (amount >= flow.target) {
-              markDone(flow.quest.id);
-              game.completeQuest(flow.quest.id);
+          focus={STRETCH_FOCUS[flow.quest.templateId]}
+          onDone={(counted) => {
+            if (counted >= flow.target && counted > flow.base) {
+              if (!flow.quest.done) markDone(flow.quest.id);
+              game.completeQuest(flow.quest.id, scanToAchieved(flow.quest, counted, custom));
             }
             setFlow(null);
           }}
@@ -247,13 +330,15 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
           }}
         />
       )}
-      {flow?.kind === 'undo' && (
-        <UndoSheet
-          quest={flow.quest}
-          proof={proofFor(flow.quest, state.customQuests).kind}
-          onCancel={close}
+      {flow?.kind === 'done' && (
+        <DoneSheet
+          // show the live quest (health data or pages may have raised it since the tap)
+          quest={day.quests.find((q) => q.id === flow.quest.id) ?? flow.quest}
+          proof={proofFor(flow.quest, custom).kind}
+          onClose={close}
+          onMore={() => startScan(day.quests.find((q) => q.id === flow.quest.id) ?? flow.quest, true)}
           onRead={() => setFlow({ kind: 'read' })}
-          onConfirm={() => {
+          onUndo={() => {
             game.uncheckQuest(flow.quest.id);
             setJustDone((l) => l.filter((x) => x !== flow.quest.id));
             setFlow(null);
@@ -282,10 +367,20 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
   );
 }
 
-/** The small line under an open quest: health progress, pages read today, or attribute and XP. */
+const percentOf = (q: QuestInstance) => Math.round((questAchieved(q) / q.amount) * 100);
+
+/**
+ * The small line under a quest: health progress or pages read today while open, else attribute and
+ * XP. Done quests show the XP earned, and how much was done when it is more than asked.
+ */
 function questNote(state: GameState, today: string, q: QuestInstance): string {
+  if (q.done) {
+    const xp = `+${questXp(q)} XP`;
+    const got = questAchieved(q);
+    if (q.amount > 0 && got > q.amount + 1e-9) return `${fmtNum(got)} / ${fmtNum(q.amount)} ${q.unit} · ${percentOf(q)} % · ${xp}`;
+    return `${ATTR_LABEL[q.attr]} · ${xp}`;
+  }
   const fallback = `${ATTR_LABEL[q.attr]} · +${q.xp} XP`;
-  if (q.done) return fallback;
   const value = healthProgress(q, state.health.days, today, state.customQuests);
   if (value !== null) {
     return state.health.connected ? `${fmtNum(value)} von ${fmtNum(q.amount)} ${q.unit} · Samsung Health` : 'Kommt aus Samsung Health';
@@ -306,22 +401,29 @@ function QuestRow(props: {
   onTap: () => void;
 }) {
   const { quest: q, swapMode, swappable, proof, note, onTap } = props;
-  const [burst, setBurst] = useState(0);
-  const wasDone = useRef(q.done);
+  const xp = questXp(q);
+  const doubled = isDoubled(q);
+  const [burst, setBurst] = useState<{ key: number; xp: number } | null>(null);
+  const lastXp = useRef(xp);
 
-  // Celebrate when the quest turns done (after a scan, a page photo, or Samsung Health).
+  // Celebrate when the quest earns XP: turning done (scan, page photo, Samsung Health) or doing more.
   useEffect(() => {
-    if (q.done && !wasDone.current) {
-      setBurst((b) => b + 1);
+    if (xp > lastXp.current) {
+      const gained = xp - lastXp.current;
+      setBurst((b) => ({ key: (b?.key ?? 0) + 1, xp: gained }));
       navigator.vibrate?.(30);
     }
-    wasDone.current = q.done;
-  }, [q.done]);
+    lastXp.current = xp;
+  }, [xp]);
 
-  const label = swapMode ? `${q.title} tauschen` : q.done ? `${q.title}, erledigt. Zurücknehmen?` : `${q.title}: Nachweis, ${PROOF_LABEL[proof]}`;
+  const label = swapMode
+    ? `${q.title} tauschen`
+    : q.done
+      ? `${q.title}, erledigt${doubled ? ' (doppelt)' : ''}. Mehr machen oder zurücknehmen?`
+      : `${q.title}: Nachweis, ${PROOF_LABEL[proof]}`;
 
   return (
-    <li className={`quest attr-${q.attr} ${q.done ? 'done' : ''} ${swapMode && !swappable ? 'locked' : ''}`}>
+    <li className={`quest attr-${q.attr} ${q.done ? 'done' : ''} ${q.extra ? 'is-extra' : ''} ${swapMode && !swappable ? 'locked' : ''}`}>
       <button className="quest-main" onClick={onTap} aria-label={label} disabled={swapMode && !swappable}>
         <AttrTile attr={q.attr} />
         <span className="quest-text">
@@ -336,14 +438,19 @@ function QuestRow(props: {
           {swapMode && swappable ? (
             <Icon name="swap" size={20} />
           ) : q.done ? (
-            <Badge3D icon="check" tone={q.attr} shape="coin" size={42} />
+            <Badge3D icon="check" tone={doubled ? 'gold' : q.attr} shape="coin" size={42} />
           ) : (
             <Icon name={PROOF_ICON[proof]} size={20} />
           )}
         </span>
-        {burst > 0 && q.done && (
-          <span key={burst} className="xp-burst display" aria-hidden>
-            +{q.xp} XP
+        {doubled && (
+          <span className="x2-badge display" aria-hidden>
+            2×
+          </span>
+        )}
+        {burst && q.done && (
+          <span key={burst.key} className="xp-burst display" aria-hidden>
+            +{burst.xp} XP
           </span>
         )}
       </button>
@@ -412,37 +519,83 @@ function HealthSheet({ game, today, quest: q, metric, onClose }: { game: Game; t
   );
 }
 
-function UndoSheet({
+/** A done quest: how much was done, doing more (up to 2×) and taking it back. */
+function DoneSheet({
   quest: q,
   proof,
-  onCancel,
-  onConfirm,
+  onClose,
+  onMore,
   onRead,
+  onUndo,
 }: {
   quest: QuestInstance;
   proof: ProofKind;
-  onCancel: () => void;
-  onConfirm: () => void;
+  onClose: () => void;
+  onMore: () => void;
   onRead: () => void;
+  onUndo: () => void;
 }) {
+  const got = questAchieved(q);
+  const max = maxAchieved(q);
+  const doubled = isDoubled(q);
+  const xp = questXp(q);
   return (
-    <Sheet title="Zurücknehmen?" onClose={onCancel}>
+    <Sheet title={q.title} onClose={onClose}>
       <div className="proof-sheet">
-        <p>
-          <strong>{q.title}</strong> ist erledigt. Nimmst du das zurück, fallen die {q.xp} XP dafür weg.
+        <div className={`proof-progress attr-${q.attr}`}>
+          <span className="proof-value">
+            <span className="display">{fmtNum(got)}</span> von {fmtNum(q.amount)} {q.unit} · {percentOf(q)} %
+          </span>
+          <span className="proof-bar double" aria-hidden>
+            <span style={{ width: `${Math.min(got / max, 1) * 100}%` }} />
+          </span>
+          <span className="double-scale" aria-hidden>
+            <span>1× · {fmtNum(q.amount)}</span>
+            <span>2× · {fmtNum(max)}</span>
+          </span>
+          <span className="done-xp">
+            <strong className="display">{xp} XP</strong>
+            {doubled ? ` · +2 ${ATTR_LABEL[q.attr]}` : ` · bis 2×: ${Math.round(q.xp * 2)} XP und +1 ${ATTR_LABEL[q.attr]} extra`}
+          </span>
+        </div>
+
+        {doubled ? (
+          <p className="proof-note">Doppelt geschafft. Mehr als 2× zählt nicht.</p>
+        ) : proof === 'camera' || proof === 'presence' ? (
+          <>
+            <p className="small-text">
+              Die Kamera zählt ab {fmtNum(got)} weiter (bis 2×: {fmtNum(max)} {q.unit}). Alles darüber bringt mehr XP, doppelt gibt es einen
+              Bonus-Punkt {ATTR_LABEL[q.attr]}.
+            </p>
+            <button className="primary" onClick={onMore}>
+              <Icon name="camera" size={20} />
+              Mehr machen (bis 2×)
+            </button>
+          </>
+        ) : proof === 'health' ? (
+          <p className="small-text">
+            Kommt aus Samsung Health: Was du heute mehr machst, zählt automatisch mit, bis 2× ({fmtNum(max)} {q.unit}). Von Hand geht es nicht.
+          </p>
+        ) : proof === 'photo' ? (
+          <>
+            <p className="small-text">Jede Seite, die du heute mehr liest, zählt mit, bis 2× ({fmtNum(max)} Seiten). Trag sie mit Foto ein.</p>
+            <button className="primary" onClick={onRead}>
+              <Icon name="book" size={20} />
+              Mehr machen (bis 2×)
+            </button>
+          </>
+        ) : null}
+
+        <p className="small-text">
+          Nimmst du die Quest zurück, fallen die {xp} XP dafür weg.
           {proof === 'health' && ' Solange Samsung Health genug meldet, hakt sich die Quest gleich wieder ab.'}
           {proof === 'photo' && ' Deine eingetragenen Seiten bleiben gespeichert.'}
         </p>
-        {proof === 'photo' && (
-          <button className="primary" onClick={onRead}>
-            Seiten eintragen
-          </button>
-        )}
         <div className="row">
-          <button className="secondary" onClick={onCancel}>
+          <button className="secondary" onClick={onClose}>
             Behalten
           </button>
-          <button className="danger grow" onClick={onConfirm}>
+          <button className="danger grow" onClick={onUndo}>
             Zurücknehmen
           </button>
         </div>

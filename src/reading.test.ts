@@ -17,7 +17,19 @@ import {
   type GameState,
   type Profile,
 } from './game';
-import { currentBook, finishedBooks, logPages, pagesReadOn, startBook, totalPagesRead, undoLastPages, unfinishedBooks } from './reading';
+import {
+  bookProgress,
+  currentBook,
+  finishedBooks,
+  logPages,
+  pagesReadOn,
+  startBook,
+  totalPagesRead,
+  undoLastPages,
+  unfinishedBooks,
+  updateBook,
+} from './reading';
+import { questXp } from './game';
 
 const TODAY = '2026-11-16';
 const PHOTO = 'data:image/jpeg;base64,AAAA';
@@ -31,21 +43,22 @@ function withBook(p: Profile = profile): GameState {
 const readQuest = (s: GameState, date = TODAY) => s.days[date].quests.find((q) => q.templateId === READ_QUEST);
 
 describe('daily reading quest', () => {
-  it('is a fixed extra quest scaled by difficulty only', () => {
+  it('is a fixed required quest scaled by difficulty only', () => {
     const day = generateDay(TODAY, 30, 2);
-    expect(day.quests.map((q) => q.templateId).slice(0, 2)).toEqual(['steps', 'read']);
-    expect(day.quests.filter((q) => q.attr !== 'intelligenz')).toHaveLength(4);
+    expect(day.quests.map((q) => q.templateId).slice(0, 5)).toEqual(['steps', 'pushups', 'squats', 'plank', 'read']);
+    expect(day.quests.filter((q) => q.attr !== 'intelligenz')).toHaveLength(8);
     expect(readQuest({ ...emptyState(), days: { [TODAY]: day } })).toMatchObject({ title: 'Lesen', unit: 'Seiten', amount: 10, xp: 30 });
-    expect(generateDay(TODAY, 1, 1).quests[1].amount).toBe(6);
-    expect(generateDay(TODAY, 1, 3).quests[1].amount).toBe(15);
+    expect(readQuest({ ...emptyState(), days: { [TODAY]: day } })!.extra).toBeUndefined();
+    expect(generateDay(TODAY, 1, 1).quests[4].amount).toBe(6);
+    expect(generateDay(TODAY, 1, 3).quests[4].amount).toBe(15);
   });
 
   it('is on unless the profile switches it off, and cannot be swapped', () => {
-    expect(fixedQuests(profile).map((t) => t.id)).toEqual(['steps', 'read']);
-    expect(fixedQuests({ ...profile, reading: false }).map((t) => t.id)).toEqual(['steps']);
+    expect(fixedQuests(profile).map((t) => t.id)).toEqual(['steps', 'pushups', 'squats', 'plank', 'read']);
+    expect(fixedQuests({ ...profile, reading: false }).map((t) => t.id)).toEqual(['steps', 'pushups', 'squats', 'plank']);
     const off = dayFor({ ...emptyState(), profile: { ...profile, reading: false } }, TODAY, 1);
     expect(off.quests.some((q) => q.templateId === READ_QUEST)).toBe(false);
-    expect(off.quests).toHaveLength(4);
+    expect(off.quests).toHaveLength(8);
     const on = dayFor({ ...emptyState(), profile }, TODAY, 1);
     // the random picks stay the same with or without reading
     expect(on.quests.filter((q) => q.templateId !== READ_QUEST).map((q) => q.templateId)).toEqual(off.quests.map((q) => q.templateId));
@@ -56,7 +69,7 @@ describe('daily reading quest', () => {
     const old = dayFor({ ...emptyState(), profile: { ...profile, reading: false } }, TODAY, 1);
     expect(dayOutdated(old, profile)).toBe(true);
     expect(dayOutdated(old, { ...profile, reading: false })).toBe(false);
-    expect(dayOutdated(completeQuest(old, old.quests[2].id), profile)).toBe(false); // something ticked: keep it
+    expect(dayOutdated(completeQuest(old, old.quests[5].id), profile)).toBe(false); // something ticked: keep it
     expect(dayOutdated(undefined, profile)).toBe(false);
   });
 
@@ -66,7 +79,7 @@ describe('daily reading quest', () => {
     const on = setReading(s, TODAY, true);
     expect(on.profile!.reading).toBe(true);
     expect(readQuest(on)).toMatchObject({ amount: 10, done: false });
-    expect(new Set(on.days[TODAY].quests.map((q) => q.id)).size).toBe(5);
+    expect(new Set(on.days[TODAY].quests.map((q) => q.id)).size).toBe(9);
     const off = setReading(on, TODAY, false);
     expect(off.profile!.reading).toBe(false);
     expect(readQuest(off)).toBeUndefined();
@@ -239,5 +252,106 @@ describe('reading log', () => {
     expect(byId['pages-500']).toMatchObject({ unlocked: true, value: 500 });
     expect(byId['book-1'].achievement).toMatchObject({ title: 'Bücherwurm', tier: 'bronze', icon: 'book' });
     expect(achievementStatus(withBook(), TODAY).find((a) => a.achievement.id === 'pages-500')!.value).toBe(0);
+  });
+});
+
+describe('reading more than asked', () => {
+  it('counts today\'s pages as achieved, up to twice the amount', () => {
+    let s = withBook();
+    const id = currentBook(s)!.id;
+    s = logPages(s, TODAY, { bookId: id, page: 104, photo: PHOTO }).state;
+    expect(readQuest(s)).toMatchObject({ done: false });
+    expect(readQuest(s)!.achieved).toBeUndefined();
+    s = logPages(s, TODAY, { bookId: id, page: 112, photo: PHOTO }).state;
+    expect(readQuest(s)).toMatchObject({ done: true, achieved: 12 });
+    expect(questXp(readQuest(s)!)).toBe(36);
+    s = logPages(s, TODAY, { bookId: id, page: 118, photo: PHOTO }).state;
+    expect(readQuest(s)!.achieved).toBe(18);
+    s = logPages(s, TODAY, { bookId: id, page: 150, photo: PHOTO }).state;
+    expect(readQuest(s)!.achieved).toBe(20); // capped at 2×
+    expect(attributes(s).intelligenz).toBe(2); // +1 bonus at 2×
+  });
+
+  it('a finished book completes at 1× with few pages, and undo lowers achieved again', () => {
+    const s = withBook();
+    const id = currentBook(s)!.id;
+    const fin = logPages(s, TODAY, { bookId: id, page: 103, photo: PHOTO, finished: true }).state;
+    expect(readQuest(fin)).toMatchObject({ done: true, achieved: 10 });
+    let t = logPages(s, TODAY, { bookId: id, page: 112, photo: PHOTO }).state;
+    t = logPages(t, TODAY, { bookId: id, page: 125, photo: PHOTO }).state;
+    expect(readQuest(t)!.achieved).toBe(20);
+    t = undoLastPages(t, TODAY, id);
+    expect(readQuest(t)).toMatchObject({ done: true, achieved: 12 });
+  });
+});
+
+describe('book cover and page count', () => {
+  it('starts a book with a cover and a page count, ignoring bad counts', () => {
+    const s = startBook(withBook(), 'Momo', TODAY, 0, { cover: PHOTO, totalPages: 320 });
+    expect(currentBook(s)).toMatchObject({ title: 'Momo', cover: PHOTO, totalPages: 320 });
+    const bad = startBook(withBook(), 'X', TODAY, 50, { totalPages: 20 });
+    expect(currentBook(bad)!.totalPages).toBeUndefined();
+    expect(currentBook(startBook(withBook(), 'Y', TODAY, 0, { totalPages: 12.5 }))!.totalPages).toBeUndefined();
+    expect(currentBook(startBook(withBook(), 'Z', TODAY))!.cover).toBeUndefined();
+  });
+
+  it('updates title, cover and page count with checks', () => {
+    const s = withBook(); // Der Hobbit at page 100
+    const id = currentBook(s)!.id;
+    const r = updateBook(s, id, { title: ' Der kleine Hobbit ', cover: PHOTO, totalPages: 310 });
+    expect(r.error).toBeUndefined();
+    expect(currentBook(r.state)).toMatchObject({ title: 'Der kleine Hobbit', cover: PHOTO, totalPages: 310 });
+    const low = updateBook(s, id, { totalPages: 90 });
+    expect(low.error).toBe('Das Buch hat weniger Seiten als deine letzte Seite (S. 100).');
+    expect(low.state).toBe(s);
+    expect(updateBook(s, id, { totalPages: 0 }).error).toBe('Gib eine gültige Seitenzahl ein.');
+    expect(updateBook(s, id, { title: '  ' }).error).toBe('Gib einen Titel ein.');
+    expect(updateBook(s, 'nope', { title: 'X' }).error).toBe('Das Buch gibt es nicht.');
+    const cleared = updateBook(r.state, id, { cover: null, totalPages: null }).state;
+    expect(currentBook(cleared)!.cover).toBeUndefined();
+    expect(currentBook(cleared)!.totalPages).toBeUndefined();
+  });
+
+  it('rejects pages beyond the end and flags the last page', () => {
+    const s = updateBook(withBook(), 'book-1', { totalPages: 320 }).state;
+    const over = logPages(s, TODAY, { bookId: 'book-1', page: 321, photo: PHOTO });
+    expect(over.error).toBe('Das Buch hat nur 320 Seiten.');
+    expect(over.reachedEnd).toBe(false);
+    const mid = logPages(s, TODAY, { bookId: 'book-1', page: 200, photo: PHOTO });
+    expect(mid.reachedEnd).toBe(false);
+    const end = logPages(s, TODAY, { bookId: 'book-1', page: 320, photo: PHOTO });
+    expect(end.error).toBeUndefined();
+    expect(end.reachedEnd).toBe(true);
+    expect(end.state.reading.books[0].finishedOn).toBeUndefined(); // no auto-finish
+    expect(logPages(end.state, TODAY, { bookId: 'book-1', page: 320, photo: PHOTO, finished: true }).reachedEnd).toBe(false);
+    expect(logPages(withBook(), TODAY, { bookId: 'book-1', page: 900, photo: PHOTO }).reachedEnd).toBe(false); // no count known
+  });
+
+  it('reports progress with and without a page count', () => {
+    const s = withBook();
+    expect(bookProgress(currentBook(s)!)).toEqual({ page: 100 });
+    const withTotal = updateBook(s, 'book-1', { totalPages: 400 }).state;
+    expect(bookProgress(currentBook(withTotal)!)).toEqual({ page: 100, total: 400, percent: 25 });
+    const done = logPages(withTotal, TODAY, { bookId: 'book-1', page: 390, photo: PHOTO, finished: true }).state;
+    expect(bookProgress(done.reading.books[0])).toEqual({ page: 390, total: 400, percent: 100 });
+  });
+
+  it('repairs covers and page counts in old saves', () => {
+    const books = [
+      { id: 'a', title: 'A', startedOn: TODAY, lastPage: 10, log: [] },
+      { id: 'b', title: 'B', startedOn: TODAY, lastPage: 10, log: [], cover: PHOTO, totalPages: 200 },
+      { id: 'c', title: 'C', startedOn: TODAY, lastPage: 50, log: [], cover: 5, totalPages: 20 },
+      { id: 'd', title: 'D', startedOn: TODAY, lastPage: 0, log: [], cover: '', totalPages: -3 },
+      { id: 'e', title: 'E', startedOn: TODAY, lastPage: 0, log: [], totalPages: 'x' },
+    ];
+    const loaded = normalize({ ...emptyState(), reading: { books: books as never } });
+    const [a, b, c, d, e] = loaded.reading.books;
+    expect(a.cover).toBeUndefined();
+    expect(a.totalPages).toBeUndefined();
+    expect(b).toMatchObject({ cover: PHOTO, totalPages: 200 });
+    for (const x of [c, d, e]) {
+      expect('cover' in x).toBe(false);
+      expect('totalPages' in x).toBe(false);
+    }
   });
 });

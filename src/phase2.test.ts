@@ -29,8 +29,9 @@ describe('custom and disabled quests', () => {
   it('appends daily custom quests with their exact amount', () => {
     const c = custom(true);
     const day = generateDay('2026-11-15', 30, 3, QUEST_POOL, [c]);
-    expect(day.quests).toHaveLength(6); // steps, reading, three random, one daily custom
-    expect(day.quests[5]).toMatchObject({ templateId: c.id, amount: 5, xp: 30 });
+    expect(day.quests).toHaveLength(10); // four core, reading, four extras, one daily custom
+    expect(day.quests[9]).toMatchObject({ templateId: c.id, amount: 5, xp: 30 });
+    expect(day.quests[9].extra).toBeUndefined(); // daily custom quests are required
   });
 
   it('keeps daily quests out of the random pool and leaves out disabled ones', () => {
@@ -44,8 +45,8 @@ describe('custom and disabled quests', () => {
     const disabled = QUEST_POOL.filter((q) => q.attr === 'beweglichkeit').map((q) => q.id);
     const pool = randomPool({ customQuests: [], disabledQuests: disabled });
     const day = generateDay('2026-11-15', 1, 2, pool);
-    expect(day.quests).toHaveLength(5);
-    expect(day.quests.filter((q) => q.attr !== 'intelligenz')).toHaveLength(4);
+    expect(day.quests).toHaveLength(9);
+    expect(day.quests.filter((q) => q.extra)).toHaveLength(4);
     expect(day.quests.some((q) => q.attr === 'beweglichkeit')).toBe(false);
   });
 
@@ -85,7 +86,7 @@ describe('seasons', () => {
       days: { '2026-11-01': doneDay('2026-11-01'), '2026-11-02': doneDay('2026-11-02'), '2026-11-05': doneDay('2026-11-05') },
     };
     const s = summarizeSeason(state, '2026-11-01', 3);
-    expect(s).toMatchObject({ endDate: '2026-11-03', daysCleared: 2, bestStreak: 2, questsDone: 10 });
+    expect(s).toMatchObject({ endDate: '2026-11-03', daysCleared: 2, bestStreak: 2, questsDone: 18 });
     expect(seasonOver(state.profile!, '2026-11-03')).toBe(false);
     expect(seasonOver(state.profile!, '2026-11-04')).toBe(true);
 

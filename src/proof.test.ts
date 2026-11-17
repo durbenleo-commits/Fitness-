@@ -163,7 +163,7 @@ describe('completing quests', () => {
     const day = generateDay('2026-11-16', 1, 2);
     const id = day.quests[1].id;
     const done = completeQuest(day, id);
-    expect(done.quests.map((x) => x.done)).toEqual([false, true, false, false, false]);
+    expect(done.quests.map((x) => x.done)).toEqual([false, true, false, false, false, false, false, false, false]);
     expect(completeQuest(done, id)).toBe(done);
     expect(completeQuest(day, 'nope')).toBe(day);
     const undone = uncheckQuest(done, id);

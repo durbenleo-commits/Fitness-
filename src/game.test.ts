@@ -39,8 +39,8 @@ describe('quest generation', () => {
     const a = generateDay('2026-11-15', 1, 2);
     const b = generateDay('2026-11-15', 1, 2);
     expect(a).toEqual(b);
-    expect(a.quests).toHaveLength(5); // steps, reading, three random
-    expect(new Set(a.quests.map((q) => q.templateId)).size).toBe(5);
+    expect(a.quests).toHaveLength(9); // four core quests, reading, four extras
+    expect(new Set(a.quests.map((q) => q.templateId)).size).toBe(9);
     for (const attr of ['staerke', 'ausdauer', 'beweglichkeit', 'intelligenz']) {
       expect(a.quests.some((q) => q.attr === attr)).toBe(true);
     }
@@ -58,13 +58,13 @@ describe('quest generation', () => {
 
   it('allows one reroll per day and never duplicates a quest', () => {
     const day = generateDay('2026-11-15', 1, 2);
-    expect(rerollQuest(day, day.quests[0].id, 1, 2)).toBe(day); // the step goal stays
-    expect(rerollQuest(day, day.quests[1].id, 1, 2)).toBe(day); // reading stays
-    const once = rerollQuest(day, day.quests[2].id, 1, 2);
+    for (let i = 0; i < 5; i++) expect(rerollQuest(day, day.quests[i].id, 1, 2)).toBe(day); // core quests and reading stay
+    const once = rerollQuest(day, day.quests[5].id, 1, 2);
     expect(once.rerollsUsed).toBe(1);
-    expect(once.quests[2].templateId).not.toBe(day.quests[2].templateId);
-    expect(new Set(once.quests.map((q) => q.templateId)).size).toBe(5);
-    expect(rerollQuest(once, once.quests[3].id, 1, 2)).toBe(once);
+    expect(once.quests[5].templateId).not.toBe(day.quests[5].templateId);
+    expect(once.quests[5].extra).toBe(true);
+    expect(new Set(once.quests.map((q) => q.templateId)).size).toBe(9);
+    expect(rerollQuest(once, once.quests[6].id, 1, 2)).toBe(once);
   });
 });
 
@@ -75,7 +75,7 @@ describe('daily step goal', () => {
       expect(day.quests[0].templateId).toBe('steps');
       expect(day.quests[0].amount).toBe(7000);
       expect(day.quests.some((q) => q.templateId === 'walk')).toBe(false);
-      expect(day.quests).toHaveLength(5);
+      expect(day.quests).toHaveLength(9);
     }
     expect(generateDay('2026-11-15', 1, 1).quests[0].amount).toBe(4000);
   });

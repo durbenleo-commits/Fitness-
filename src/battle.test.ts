@@ -120,7 +120,8 @@ describe('health auto-complete', () => {
     };
     const next = autoCompleteFromHealth(s, '2026-11-16');
     const byId = Object.fromEntries(next.days['2026-11-16'].quests.map((q) => [q.templateId, q.done]));
-    expect(byId).toEqual({ steps: true, read: false, run: false, pushups: false, stretch: false });
+    // steps is a core quest; run and stretch are the only extras the small pool allows
+    expect(byId).toEqual({ steps: true, pushups: false, squats: false, plank: false, read: false, run: false, stretch: false });
     expect(autoCompleteFromHealth({ ...s, health: { ...s.health, connected: false } }, '2026-11-16').days).toBe(s.days);
   });
 });

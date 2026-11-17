@@ -3,9 +3,11 @@ import { defeated } from './battle';
 import {
   attributes,
   bestStreak,
+  daysAllDoubled,
   isCleared,
   levelFromXp,
   questsDone,
+  questsDoubled,
   seasonOver,
   totalFor,
   totalXp,
@@ -31,17 +33,22 @@ interface Context {
   best: number;
   level: number;
   attrs: ReturnType<typeof attributes>;
+  doubled: number; // quests done at 2×
+  allOut: number; // days with every required quest at 2×
 }
 
 export const ACHIEVEMENTS: Achievement[] = [
   { id: 'first-quest', icon: 'target', tier: 'bronze', title: 'Erster Schritt', description: 'Erledige deine erste Quest.', target: 1, progress: (c) => c.quests },
-  { id: 'first-clear', icon: 'check', tier: 'bronze', title: 'Tag geschafft', description: 'Erledige an einem Tag alle Quests.', target: 1, progress: (c) => c.cleared },
-  { id: 'streak-3', icon: 'flame', tier: 'bronze', title: 'Warm gelaufen', description: '3 Tage in Folge alle Quests.', target: 3, progress: (c) => c.best },
-  { id: 'streak-7', icon: 'calendar', tier: 'silver', title: 'Eine Woche', description: '7 Tage in Folge alle Quests.', target: 7, progress: (c) => c.best },
-  { id: 'streak-14', icon: 'chain', tier: 'silver', title: 'Nicht zu stoppen', description: '14 Tage in Folge alle Quests.', target: 14, progress: (c) => c.best },
-  { id: 'streak-30', icon: 'trophy', tier: 'gold', title: 'Eiserner Wille', description: '30 Tage in Folge alle Quests.', target: 30, progress: (c) => c.best },
+  { id: 'first-clear', icon: 'check', tier: 'bronze', title: 'Tag geschafft', description: 'Erledige an einem Tag alle Pflicht-Quests.', target: 1, progress: (c) => c.cleared },
+  { id: 'streak-3', icon: 'flame', tier: 'bronze', title: 'Warm gelaufen', description: '3 Tage in Folge alle Pflicht-Quests.', target: 3, progress: (c) => c.best },
+  { id: 'streak-7', icon: 'calendar', tier: 'silver', title: 'Eine Woche', description: '7 Tage in Folge alle Pflicht-Quests.', target: 7, progress: (c) => c.best },
+  { id: 'streak-14', icon: 'chain', tier: 'silver', title: 'Nicht zu stoppen', description: '14 Tage in Folge alle Pflicht-Quests.', target: 14, progress: (c) => c.best },
+  { id: 'streak-30', icon: 'trophy', tier: 'gold', title: 'Eiserner Wille', description: '30 Tage in Folge alle Pflicht-Quests.', target: 30, progress: (c) => c.best },
   { id: 'quests-50', icon: 'today', tier: 'bronze', title: 'Fleißig', description: 'Erledige 50 Quests.', target: 50, progress: (c) => c.quests },
   { id: 'quests-200', icon: 'mountain', tier: 'silver', title: 'Dauerbrenner', description: 'Erledige 200 Quests.', target: 200, progress: (c) => c.quests },
+  { id: 'double-1', icon: 'star', tier: 'bronze', title: 'Doppelt hält besser', description: 'Schaff eine Quest doppelt.', target: 1, progress: (c) => c.doubled },
+  { id: 'double-25', icon: 'bolt', tier: 'silver', title: 'Übererfüller', description: 'Schaff 25 Quests doppelt.', target: 25, progress: (c) => c.doubled },
+  { id: 'double-day', icon: 'trophy', tier: 'gold', title: 'Alles gegeben', description: 'Schaff an einem Tag alle Pflicht-Quests doppelt.', target: 1, progress: (c) => c.allOut },
   { id: 'level-5', icon: 'arrowUp', tier: 'bronze', title: 'Aufsteiger', description: 'Erreiche Level 5.', target: 5, progress: (c) => c.level },
   { id: 'level-10', icon: 'medal', tier: 'silver', title: 'Kämpfer', description: 'Erreiche Level 10.', target: 10, progress: (c) => c.level },
   { id: 'level-20', icon: 'crown', tier: 'gold', title: 'Elite', description: 'Erreiche Level 20.', target: 20, progress: (c) => c.level },
@@ -92,6 +99,8 @@ export function achievementStatus(state: GameState, today: string): AchievementS
     best: bestStreak(state),
     level: levelFromXp(totalXp(state)).level,
     attrs: attributes(state),
+    doubled: questsDoubled(state),
+    allOut: daysAllDoubled(state),
   };
   return ACHIEVEMENTS.map((a) => {
     const value = a.progress(c);

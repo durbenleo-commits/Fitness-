@@ -377,6 +377,7 @@ export interface StretchPose {
   id: string;
   name: string; // German, for the UI
   hint: string; // German, short instruction
+  muscles: string; // German, the main muscles this pose stretches
   needs: number[]; // landmarks that must be clearly visible
   view?: ViewNeed; // camera view the check needs; missing = 'any'
   /** null when the needed body parts are not clearly visible, else whether the pose is held. */
@@ -392,10 +393,10 @@ const kneeAngle = (lm: Point[], s: typeof L, aspect: number) => angle(lm[s.hip],
 const elbowAngle = (lm: Point[], s: typeof L, aspect: number) => angle(lm[s.shoulder], lm[s.elbow], lm[s.wrist], aspect);
 
 /** Side bend: the wrist of `up` is above the head and the shoulder line drops by more than 12° toward the other side. */
-function sideBend(id: string, name: string, hint: string, up: typeof L, other: typeof L): StretchPose {
+function sideBend(id: string, name: string, hint: string, muscles: string, up: typeof L, other: typeof L): StretchPose {
   // The shoulder line tilts sideways: only seen with the chest toward the camera. From the side the
   // shoulders overlap and their line can point anywhere, so a clear side view never counts.
-  return stretchPose({ id, name, hint, needs: [NOSE, L.shoulder, R.shoulder, up.wrist], view: 'front' }, (lm, aspect) => {
+  return stretchPose({ id, name, hint, muscles, needs: [NOSE, L.shoulder, R.shoulder, up.wrist], view: 'front' }, (lm, aspect) => {
     const handUp = lm[up.wrist].y < lm[NOSE].y;
     // The other hand stays down (if seen): with both arms up and the phone low and at an angle,
     // perspective alone tilts the shoulder line.
@@ -405,12 +406,21 @@ function sideBend(id: string, name: string, hint: string, up: typeof L, other: t
   });
 }
 
+/** What the stretch routine works on, per quest template id (all four use the same routine). */
+export const STRETCH_FOCUS: Record<string, string> = {
+  stretch: 'Dehnt: Oberschenkel, Waden, Rücken, Rumpfseiten, Schultern, Brust und Hüfte.',
+  mobility: 'Mobilisiert und dehnt: Hüfte, Rücken, Rumpfseiten, Schultern, Oberschenkel und Waden.',
+  hips: 'Schwerpunkt Hüfte (Ausfallschritt-Dehnung), dazu: Oberschenkel, Waden, Rücken, Rumpfseiten, Schultern und Brust.',
+  bandstretch: 'Dehnt: Oberschenkel, Waden, Rücken, Rumpfseiten, Schultern, Brust und Hüfte.',
+};
+
 export const STRETCH_POSES: StretchPose[] = [
   stretchPose(
     {
       id: 'forward-fold',
       name: 'Vorbeuge',
       hint: 'Beine fast gestreckt, Hände unter die Knie.',
+      muscles: 'Hintere Oberschenkel, Waden und unterer Rücken',
       needs: [L.hip, L.knee, L.ankle, R.hip, R.knee, R.ankle, L.wrist, R.wrist],
     },
     (lm, aspect) => {
@@ -419,13 +429,14 @@ export const STRETCH_POSES: StretchPose[] = [
       return straight && lm[L.wrist].y > kneeY && lm[R.wrist].y > kneeY;
     },
   ),
-  sideBend('side-bend-left', 'Seitneigung links', 'Zur Kamera schauen. Rechten Arm über den Kopf, Oberkörper zur linken Seite neigen.', R, L),
-  sideBend('side-bend-right', 'Seitneigung rechts', 'Zur Kamera schauen. Linken Arm über den Kopf, Oberkörper zur rechten Seite neigen.', L, R),
+  sideBend('side-bend-left', 'Seitneigung links', 'Zur Kamera schauen. Rechten Arm über den Kopf, Oberkörper zur linken Seite neigen.', 'Seitlicher Rumpf und Flanke (rechte Seite)', R, L),
+  sideBend('side-bend-right', 'Seitneigung rechts', 'Zur Kamera schauen. Linken Arm über den Kopf, Oberkörper zur rechten Seite neigen.', 'Seitlicher Rumpf und Flanke (linke Seite)', L, R),
   stretchPose(
     {
       id: 'arms-up',
       name: 'Arme hoch',
       hint: 'Aufrecht stehen, beide Arme gestreckt nach oben.',
+      muscles: 'Schultern, Brustmuskeln und Rücken',
       needs: [NOSE, L.shoulder, R.shoulder, L.elbow, R.elbow, L.wrist, R.wrist, L.hip, R.hip],
     },
     (lm, aspect) => {
@@ -441,6 +452,7 @@ export const STRETCH_POSES: StretchPose[] = [
       id: 'lunge-stretch',
       name: 'Ausfallschritt-Dehnung',
       hint: 'Seitlich zur Kamera stellen. Großer Schritt nach vorn, vorderes Knie beugen, hinteres Bein gestreckt.',
+      muscles: 'Hüftbeuger und Oberschenkel-Vorderseite des hinteren Beins, Wade',
       needs: [L.hip, L.knee, L.ankle, R.hip, R.knee, R.ankle],
       // Knee angles: head-on the bent front knee points at the camera and cannot be measured.
       view: 'side',

@@ -112,6 +112,42 @@ export function scanToAmount(proof: Pick<Extract<Proof, { kind: 'camera' }>, 'pe
   return counted / (proof.perUnit ?? 1);
 }
 
+type QuestLike = { templateId: string; unit: string; amount: number };
+
+/**
+ * The normal (1×) target of a quest in the units its proof measures: counted reps or seconds
+ * for the camera (same as scanTarget), seconds for a presence timer, the amount itself for
+ * health data (quest unit) and reading (pages).
+ */
+export function questTarget(q: QuestLike, customQuests: QuestTemplate[] = []): number {
+  const p = proofFor(q, customQuests);
+  if (p.kind === 'camera') return scanTarget(p, q.amount);
+  if (p.kind === 'presence') return p.seconds;
+  return q.amount;
+}
+
+/**
+ * The most that counts for a quest (2× its amount), in the same units as questTarget. The UI
+ * lets the scanner run on up to this value. Lunges "pro Bein": 10 pro Bein = 20 counted, max 40.
+ */
+export function questMaxTarget(q: QuestLike, customQuests: QuestTemplate[] = []): number {
+  return questTarget(q, customQuests) * 2;
+}
+
+/**
+ * Convert what the scanner counted (reps or seconds, as for questTarget) back to the quest's
+ * own unit, e.g. 40 counted lunges = 20 pro Bein, 960 s of stretching = 16 Min. Not clamped:
+ * completeQuest clamps the result to amount..2×amount.
+ */
+export function scanToAchieved(q: QuestLike, counted: number, customQuests: QuestTemplate[] = []): number {
+  const p = proofFor(q, customQuests);
+  if (!Number.isFinite(counted) || counted <= 0) return 0;
+  if (p.kind === 'camera' && p.seconds === undefined) return Number(scanToAmount(p, counted).toFixed(2));
+  if (p.kind === 'health' || p.kind === 'photo') return counted;
+  const target = questTarget(q, customQuests);
+  return Number(((q.amount * counted) / target).toFixed(2));
+}
+
 /** One synced value for a day; fields missing in old saves count as 0. */
 export function metricValue(h: HealthDay | undefined, metric: HealthMetric): number {
   return h ? (h[metric] ?? 0) : 0;

@@ -2,11 +2,14 @@ import { useRef, useState } from 'react';
 import {
   ATTR_LABEL,
   DIFFICULTY_LABEL,
+  EXTRA_QUESTS_PER_DAY,
   MAX_CUSTOM_QUESTS,
   MAX_DAILY_QUESTS,
   QUEST_ATTRS,
   QUEST_POOL,
   READ_QUEST,
+  fixedQuests,
+  isCoreQuest,
   isGameState,
   readingOn,
   makeCustomQuest,
@@ -79,6 +82,7 @@ export function SettingsView({ game }: { game: Game }) {
 
       <HealthSection game={game} />
 
+      <FixedQuests game={game} />
       <CustomQuests game={game} />
       <BuiltInQuests game={game} />
 
@@ -217,11 +221,11 @@ function CustomQuests({ game }: { game: Game }) {
               onChange={(e) => setDaily(e.target.checked)}
             />
             <span>
-              Jeden Tag als Extra-Quest
+              Jeden Tag fest dabei
               <small>
                 {dailyCount >= MAX_DAILY_QUESTS
                   ? `Du hast schon ${MAX_DAILY_QUESTS} tägliche Quests.`
-                  : 'Sonst wird sie ab morgen ab und zu zufällig gezogen.'}
+                  : 'Zählt dann als Pflicht-Quest. Sonst kommt sie ab morgen ab und zu als Extra.'}
               </small>
             </span>
           </label>
@@ -252,15 +256,45 @@ function CustomQuests({ game }: { game: Game }) {
   );
 }
 
+/** The quests of every day ("Pflicht"): the core quests, plus reading while it is on. */
+function FixedQuests({ game }: { game: Game }) {
+  const quests = fixedQuests(game.state.profile);
+  return (
+    <div className="field">
+      <span>Jeden Tag fest dabei</span>
+      <p className="small-text">
+        Diese Pflicht-Quests kommen jeden Tag. Sind alle geschafft, gibt es den Tagesbonus und die Serie läuft weiter.
+      </p>
+      <ul className="quest-list fixed-list">
+        {quests.map((q) => (
+          <li key={q.id} className={`attr-${q.attr}`}>
+            <AttrTile attr={q.attr} size="sm" />
+            <span className="ql-text">
+              <strong>{q.title}</strong>
+              <span>
+                {ATTR_LABEL[q.attr]} · {proofName(proofFor({ templateId: q.id, unit: q.unit, amount: q.base }))}
+              </span>
+            </span>
+            <span className="tag">Pflicht</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function BuiltInQuests({ game }: { game: Game }) {
   const { state } = game;
   return (
     <fieldset className="field">
-      <legend>Übungen im Zufallspool</legend>
-      <p className="small-text">Schalte Übungen aus, die du nicht machen kannst oder willst. Gilt ab morgen.</p>
+      <legend>Übungen für die Extras</legend>
+      <p className="small-text">
+        Aus diesen Übungen kommen jeden Tag {EXTRA_QUESTS_PER_DAY} wechselnde Extra-Quests. Sie sind freiwillig und bringen zusätzliche XP.
+        Schalte Übungen aus, die du nicht machen kannst oder willst. Gilt ab morgen.
+      </p>
       <ul className="quest-list">
-        {QUEST_POOL.filter((q) => !q.retired && (q.id !== READ_QUEST || readingOn(state.profile))).map((q) => {
-          const reason = q.fixed ? 'Jeden Tag fest dabei' : unavailableReason(q, state.profile);
+        {QUEST_POOL.filter((q) => !q.retired && !q.fixed && !isCoreQuest(q.id) && q.id !== READ_QUEST).map((q) => {
+          const reason = unavailableReason(q, state.profile);
           const proof = proofName(proofFor({ templateId: q.id, unit: q.unit, amount: q.base }));
           const enabled = !reason && !state.disabledQuests.includes(q.id);
           return (
@@ -278,7 +312,7 @@ function BuiltInQuests({ game }: { game: Game }) {
                 role="switch"
                 className="switch"
                 disabled={!!reason}
-                checked={enabled || !!q.fixed}
+                checked={enabled}
                 onChange={(e) => game.setQuestEnabled(q.id, e.target.checked)}
               />
             </li>

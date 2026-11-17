@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PRESENCE, SCANNABLE, STRETCH, STRETCH_POSES, STRETCH_POSE_MS, angle, bodyView, facing, initialScan, missingParts, scanAmount, scanSpec, step, viewNeed, type Point, type ScanState } from './pose';
+import { PRESENCE, SCANNABLE, STRETCH, STRETCH_FOCUS, STRETCH_POSES, STRETCH_POSE_MS, angle, bodyView, facing, initialScan, missingParts, scanAmount, scanSpec, step, viewNeed, type Point, type ScanState } from './pose';
 
 /** 33 landmarks, all visible, with some overrides. */
 function pose(over: Record<number, readonly [number, number]>, visibility = 1): Point[] {
@@ -289,6 +289,14 @@ describe('stretch routine', () => {
     expect(initialScan(STRETCH)).toMatchObject({ poseIndex: 0, poseName: 'Vorbeuge', poseMs: 0 });
     expect(SCANNABLE[STRETCH].kind).toBe('hold');
     expect(STRETCH_POSE_MS).toBe(30_000);
+  });
+
+  it('says which muscles each pose stretches', () => {
+    STRETCH_POSES.forEach((p) => expect(p.muscles.trim().length).toBeGreaterThan(0));
+    // bending left stretches the right side of the trunk, and vice versa
+    expect(STRETCH_POSES.find((p) => p.id === 'side-bend-left')!.muscles).toContain('rechte Seite');
+    expect(STRETCH_POSES.find((p) => p.id === 'side-bend-right')!.muscles).toContain('linke Seite');
+    ['stretch', 'mobility', 'hips', 'bandstretch'].forEach((id) => expect(STRETCH_FOCUS[id]?.length).toBeGreaterThan(0));
   });
 
   it('recognises each pose, and only that pose', () => {

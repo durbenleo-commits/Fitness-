@@ -55,7 +55,11 @@ type Status = 'loading' | 'running' | 'error';
  * Full-screen camera proof. `exerciseId` is a scan id: an exercise from SCANNABLE, the
  * stretch routine (STRETCH) or presence mode (PRESENCE). `target` is in the scan's own
  * unit: reps, or seconds for holds, the stretch routine and presence mode.
- * With `allowPartial` (arena) the player may hand back less than the target.
+ * With `allowPartial` (arena) the player may hand back less than the target; reaching the
+ * target hands it back at once.
+ * With `max` (quests) counting goes on past the target: from the target on a "Fertig" button
+ * hands back what was counted, and at `max` (2×) it finishes by itself. `base` is what already
+ * counts before this scan (doing more on a done quest). The result is the counted total.
  */
 export function Scanner(props: {
   exerciseId: string;
@@ -65,10 +69,13 @@ export function Scanner(props: {
   easy?: boolean;
   perUnit?: number; // counted reps per unit of `unit` (lunges: 2 per leg), shown next to the target
   allowPartial?: boolean;
+  max?: number; // quests: keep counting up to this (2× the target)
+  base?: number; // already counted before (doing more on a done quest)
+  focus?: string; // stretch routine: what it stretches, shown while the camera starts
   onDone: (amount: number) => void;
   onClose: () => void;
 }) {
-  const { exerciseId, title, target, unit, easy = false, perUnit = 1, allowPartial = false, onDone, onClose } = props;
+  const { exerciseId, title, target, unit, easy = false, perUnit = 1, allowPartial = false, max, base = 0, focus, onDone, onClose } = props;
   const spec = scanSpec(exerciseId, easy)!;
   const presence = exerciseId === PRESENCE;
   const stretch = exerciseId === STRETCH;
@@ -82,8 +89,12 @@ export function Scanner(props: {
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const finished = useRef(false);
 
-  const amount = scanAmount(scan);
-  const done = amount >= target;
+  const counted = base + scanAmount(scan);
+  const amount = max ? Math.min(counted, max) : counted;
+  const reached = amount >= target; // 1× done
+  const doubled = !!max && amount >= max; // 2× done
+  const done = max ? doubled : reached; // finishes by itself
+  const goal = max && reached ? max : target; // what the count is shown against
 
   const finish = useCallback(
     (value: number) => {
@@ -157,13 +168,24 @@ export function Scanner(props: {
     };
   }, [facing, easy]);
 
-  // Reaching the target: short celebration, then hand the result back.
+  // Reaching the end (the target, or 2× for quests): short celebration, then hand the result back.
+  const end = max ?? target;
   useEffect(() => {
     if (!done || finished.current) return;
     navigator.vibrate?.([60, 40, 60]);
-    const t = window.setTimeout(() => finish(target), 1300);
+    const t = window.setTimeout(() => finish(end), 1300);
     return () => window.clearTimeout(t);
-  }, [done, finish, target]);
+  }, [done, finish, end]);
+
+  // Quests: reaching 1× is worth a buzz, counting goes on towards 2×.
+  const wasReached = useRef(reached);
+  useEffect(() => {
+    if (reached && !wasReached.current && !done) navigator.vibrate?.([60, 40, 60]);
+    wasReached.current = reached;
+  }, [reached, done]);
+
+  // Closing after 1× keeps what was counted: the quest is done.
+  const close = () => (max && reached && amount > base ? finish(amount) : onClose());
 
   // A small buzz for every counted rep, and when the stretch routine moves to the next pose.
   const lastReps = useRef(0);
@@ -207,12 +229,9 @@ export function Scanner(props: {
   const pose = stretch ? STRETCH_POSES[scan.poseIndex ?? 0] : undefined;
   const poseSec = Math.min(Math.floor((scan.poseMs ?? 0) / 1000), STRETCH_POSE_MS / 1000);
   const shownAmount = presence || stretch ? fmtTime(amount) : String(amount);
-  const shownTarget =
-    presence || stretch
-      ? fmtTime(target)
-      : perUnit > 1 && !timed
-        ? `${target} (${Math.ceil(target / perUnit)} ${unit})`
-        : `${target} ${timed ? 'Sek.' : unit}`;
+  const fmtGoal = (v: number) =>
+    presence || stretch ? fmtTime(v) : perUnit > 1 && !timed ? `${v} (${Math.ceil(v / perUnit)} ${unit})` : `${v} ${timed ? 'Sek.' : unit}`;
+  const shownTarget = fmtGoal(goal);
 
   return (
     <div className="scanner" role="dialog" aria-modal="true" aria-label={`${title} mit Kamera nachweisen`}>
@@ -222,12 +241,13 @@ export function Scanner(props: {
       </div>
 
       <header className="scanner-top">
-        <button className="scanner-icon-btn" onClick={onClose} aria-label="Schließen">
+        <button className="scanner-icon-btn" onClick={close} aria-label="Schließen">
           <Icon name="close" size={20} />
         </button>
         <div className="scanner-title">
           <strong>{title}</strong>
           <span>{spec.cue}</span>
+          {focus && <span className="scanner-focus">{focus}</span>}
         </div>
         <button className="scanner-icon-btn" onClick={() => setFacing((f) => (f === 'user' ? 'environment' : 'user'))} aria-label="Kamera wechseln">
           <Icon name="swap" size={20} />
@@ -262,29 +282,48 @@ export function Scanner(props: {
                   {poseSec}/{STRETCH_POSE_MS / 1000} s
                 </span>
               </div>
+              <p className="pose-muscles">Dehnt: {pose.muscles}</p>
               <p>{pose.hint}</p>
               <span className="pose-bar" aria-hidden>
                 <span style={{ width: `${(poseSec / (STRETCH_POSE_MS / 1000)) * 100}%` }} />
               </span>
             </div>
           )}
-          <div className={`scanner-count ${done ? 'done' : ''}`}>
+          {max && reached && !doubled && (
+            <p className="scanner-goal" role="status">
+              <strong>Geschafft!</strong> Weiter bis 2× für Bonus-XP
+            </p>
+          )}
+          <div className={`scanner-count ${reached ? 'done' : ''} ${doubled ? 'doubled' : ''}`} key={doubled ? 'x2' : reached ? 'x1' : 'x0'}>
             <span className="display big-count">{shownAmount}</span>
             <span className="of">
               von {shownTarget}
-              {stretch && <small>Gesamtzeit</small>}
+              {max && reached && <small>2× · Bonus-XP</small>}
+              {stretch && !(max && reached) && <small>Gesamtzeit</small>}
             </span>
           </div>
           {status === 'running' && scan.view && scan.bodyVisible && !wrongShown && (
             <span className="view-chip">{scan.view === 'side' ? 'Von der Seite erkannt' : 'Von vorne erkannt'}</span>
           )}
           <p className={`scanner-status ${scan.bodyVisible && !wrongShown ? 'ok' : ''}`} aria-live="polite">
-            {done ? 'Geschafft!' : statusText}
+            {doubled ? 'Doppelt geschafft!' : done ? 'Geschafft!' : statusText}
           </p>
           {allowPartial ? (
             <button className="primary" onClick={() => finish(Math.min(amount, target))} disabled={amount === 0}>
               {amount === 0 ? 'Noch nichts gezählt' : `${shownAmount}${timed ? '' : ' Treffer'} übernehmen`}
             </button>
+          ) : max ? (
+            doubled ? (
+              <p className="scanner-note">Doppelt geschafft, Quest wird abgehakt …</p>
+            ) : reached ? (
+              <button className="primary" onClick={() => finish(amount)}>
+                Fertig
+              </button>
+            ) : (
+              <p className="scanner-note">
+                Ab {fmtGoal(target)} ist die Quest geschafft. Machst du weiter, gibt es bis {fmtGoal(max)} mehr XP.
+              </p>
+            )
           ) : (
             <p className="scanner-note">
               {done ? 'Quest wird abgehakt …' : `Die Quest hakt sich ab, sobald ${timed ? 'die Zeit erreicht ist' : 'alle Wiederholungen gezählt sind'}.`}

@@ -1,17 +1,19 @@
 # Questfit
 
-Eine kostenlose Fitness-App im Videospiel-Stil: Jeden Tag gibt es vier Sport-Quests. Wer sie erledigt, sammelt XP, steigt im Level auf und baut eine Serie auf.
+Eine kostenlose Fitness-App im Videospiel-Stil: Jeden Tag gibt es feste Pflicht-Quests und freiwillige Extras. Wer sie erledigt, sammelt XP, steigt im Level auf und baut eine Serie auf.
 
 Die App ist eine **PWA** (Progressive Web App). Sie läuft im Browser und lässt sich auf dem Handy wie eine normale App installieren, ohne Play Store und ohne Kosten.
 
 ## Funktionen
 
 - Charakter mit Name, Fitness-Stufe und Saison-Länge (30, 66 oder 90 Tage)
-- Täglich die Schritte-Quest und drei Zufalls-Quests (Stärke, Ausdauer, Beweglichkeit), dazu auf Wunsch Lesen
+- Jeden Tag 4 feste Pflicht-Quests (Schritte, Liegestütze, Kniebeugen, Unterarmstütz), dazu auf Wunsch Lesen
+- Dazu 4 wechselnde Extra-Quests: freiwillig, bringen zusätzliche XP und Attributpunkte
+- Jede Quest lässt sich bis 2× erfüllen: mehr XP und bei 2× ein Bonus-Punkt. Die Kamera zählt über das Ziel hinaus weiter
 - XP, Level, Ränge und ein Level-up-Bildschirm
 - Quests werden mit jedem Level etwas schwerer
-- Serie (Tage in Folge mit allen Quests) und 50 Bonus-XP pro geschafftem Tag
-- Eine Quest pro Tag kann man tauschen
+- Serie (Tage in Folge mit allen Pflicht-Quests) und 50 Bonus-XP pro geschafftem Tag
+- Ein Extra pro Tag kann man tauschen
 - Werte-Seite mit Attributen, Statistiken und Kalender der letzten 4 Wochen
 - Backup als Datei speichern und wieder laden
 - Funktioniert offline
@@ -24,12 +26,14 @@ Die App ist eine **PWA** (Progressive Web App). Sie läuft im Browser und lässt
   - Kamera-Zähler: Liegestütze, Kniebeugen, Ausfallschritte, Hampelmänner, Klimmzüge, Unterarmstütz, Wandsitzen, Bauchpressen,
     Bizepsbeugen, Schulterdrücken, Rudern, Kugelhantel-Schwünge, Hockstrecksprünge und Bergsteiger zählt die Kamera mit
     (Pose-Erkennung läuft komplett auf dem Handy)
-  - Dehn-Routine: Dehnen, Dehnen mit Band, Mobilisation und Hüftöffner als fünf Dehnungen, jede 30 Sekunden vor der Kamera gehalten
+  - Dehn-Routine: Dehnen, Dehnen mit Band, Mobilisation und Hüftöffner als fünf Dehnungen, jede 30 Sekunden vor der Kamera gehalten.
+    Die App zeigt bei jeder Dehnung, was gedehnt wird
   - Kamera-Zeit: Seilspringen und eigene Quests zählen nur, solange man im Bild ist
   - Samsung Health (Android-App, über Health Connect): Schritte, Laufen, Radfahren, Schwimmen, Treppen und Gerätetraining
     haken sich selbst ab und treffen Gegner automatisch
 - Leichtere Varianten auf Wunsch, z. B. Knie-Liegestütze oder Australische Klimmzüge
 - Lesen als tägliche Quest (abschaltbar): Seite mit Foto nachweisen, letzte Seite wird gespeichert, Bücher als beendet markieren.
+  Bücher auf Wunsch mit Cover-Foto und Seitenzahl (Fortschritt in Prozent), Titel, Cover und Seitenzahl lassen sich ändern.
   Bringt das Attribut Intelligenz (Klasse „Gelehrter“) und eigene Erfolge
 - Am Ende der Saison eine Auswertung und der Start einer neuen Saison (Level und XP bleiben)
 

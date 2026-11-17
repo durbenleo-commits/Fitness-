@@ -14,12 +14,13 @@ import {
   formatDate,
   isCleared,
   questsDone,
+  requiredQuests,
   summarizeSeason,
   type Attr,
   type GameState,
 } from '../game';
 import type { Game } from '../store';
-import { ReadingSheet } from './Reading';
+import { BookCard, ReadingSheet } from './Reading';
 import { currentBook, finishedBooks, totalPagesRead, type Book } from '../reading';
 import { Badge3D, Icon } from './Icons';
 import { Segmented } from './ui';
@@ -130,7 +131,9 @@ export function StatsView({ game, today, xp }: { game: Game; today: string; xp: 
       <div className="calendar" role="list">
         {last28.map((d) => {
           const day = state.days[d];
-          const ratio = day ? day.quests.filter((q) => q.done).length / day.quests.length : 0;
+          // only required quests count for the day; extras are optional
+          const req = requiredQuests(day);
+          const ratio = req.length > 0 ? req.filter((q) => q.done).length / req.length : 0;
           const cls = isCleared(day) ? 'full' : ratio > 0 ? 'part' : 'none';
           return (
             <span
@@ -138,13 +141,13 @@ export function StatsView({ game, today, xp }: { game: Game; today: string; xp: 
               role="listitem"
               className={`cal ${cls} ${d === today ? 'today' : ''}`}
               title={formatDate(d)}
-              aria-label={`${formatDate(d)}: ${cls === 'full' ? 'alle Quests' : cls === 'part' ? 'teilweise' : 'nichts'}`}
+              aria-label={`${formatDate(d)}: ${cls === 'full' ? 'alle Pflicht-Quests' : cls === 'part' ? 'teilweise' : 'nichts'}`}
             />
           );
         })}
       </div>
       <p className="legend">
-        <span className="cal full" /> alle Quests <span className="cal part" /> teilweise <span className="cal none" /> nichts
+        <span className="cal full" /> alle Pflicht-Quests <span className="cal part" /> teilweise <span className="cal none" /> nichts
       </p>
 
       <h2>Alle Übungen</h2>
@@ -287,7 +290,7 @@ const pagesOf = (b: Book) => b.log.reduce((s, l) => s + (l.to - l.from), 0);
 /** Reading log: the book on the nightstand, finished books, pages overall. */
 function Books({ game, today }: { game: Game; today: string }) {
   const { state } = game;
-  const [sheet, setSheet] = useState<'log' | 'new' | null>(null);
+  const [sheet, setSheet] = useState<'log' | 'new' | 'edit' | null>(null);
   const book = currentBook(state);
   const done = finishedBooks(state);
   const total = totalPagesRead(state);
@@ -311,24 +314,7 @@ function Books({ game, today }: { game: Game; today: string }) {
           <span className="display">{total.toLocaleString('de-DE')}</span> Seiten gelesen
         </span>
       </div>
-      {book && (
-        <div className="book-card big attr-intelligenz">
-          {book.photo ? (
-            <img className="page-thumb" src={book.photo} alt={`Letztes Foto aus „${book.title}“`} />
-          ) : (
-            <span className="page-thumb empty" aria-hidden>
-              <Icon name="book" size={26} />
-            </span>
-          )}
-          <span className="book-info">
-            <span className="book-label">Liest gerade</span>
-            <strong>{book.title}</strong>
-            <span>
-              Seite {book.lastPage} · seit {formatDate(book.startedOn)}
-            </span>
-          </span>
-        </div>
-      )}
+      {book && <BookCard book={book} big label="Liest gerade" sub={`seit ${formatDate(book.startedOn)}`} />}
       <div className="books-actions">
         {book && (
           <button className="primary" onClick={() => setSheet('log')}>
@@ -339,16 +325,23 @@ function Books({ game, today }: { game: Game; today: string }) {
           Buch anfangen
         </button>
       </div>
-      {sheet && <ReadingSheet game={game} today={today} startNew={sheet === 'new'} onClose={() => setSheet(null)} />}
+      {book && (
+        <button className="link-button books-edit" onClick={() => setSheet('edit')}>
+          <Icon name="pencil" size={16} />
+          Buch bearbeiten
+        </button>
+      )}
+      {sheet && <ReadingSheet game={game} today={today} startNew={sheet === 'new'} startEdit={sheet === 'edit'} onClose={() => setSheet(null)} />}
       {done.length > 0 && (
         <ul className="book-list">
           {[...done].reverse().map((b) => (
             <li key={b.id}>
-              <Badge3D icon="book" tone="intelligenz" size={30} />
+              {b.cover ? <img className="book-mini" src={b.cover} alt={`Cover von „${b.title}“`} /> : <Badge3D icon="book" tone="intelligenz" size={30} />}
               <span className="ql-text">
                 <strong>{b.title}</strong>
                 <span>
                   Fertig am {formatDate(b.finishedOn!, { day: 'numeric', month: 'short', year: 'numeric' })} · {pagesOf(b).toLocaleString('de-DE')} Seiten
+                  gelesen
                 </span>
               </span>
             </li>

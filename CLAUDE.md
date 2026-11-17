@@ -6,7 +6,12 @@ Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf E
 ## Was die App ist
 
 - Tägliche Sport-Quests mit XP, Level, Rängen, Serie und Saison (30/66/90 Tage).
-- Feste Tagesquest „Schritte“ plus drei Zufalls-Quests (Stärke, Ausdauer, Beweglichkeit), dazu „Lesen“ (abschaltbar).
+- Jeden Tag 4 feste Pflicht-Quests: Schritte, Liegestütze, Kniebeugen, Unterarmstütz, dazu „Lesen“ (abschaltbar) und
+  tägliche eigene Quests. Nur die Pflicht zählt für Tagesbonus und Serie.
+- Dazu 4 wechselnde Extra-Quests (freiwillig, mehr XP und Attributpunkte); der Tausch-Joker gilt nur für offene Extras.
+  Alte Tage ohne Extras zählen weiter komplett als Pflicht.
+- Jede Quest geht bis 2×: mehr XP (bis doppelt) und bei 2× ein Bonus-Attributpunkt. Die Kamera zählt über das Ziel
+  hinaus bis 2×, Samsung Health und Lesen zählen automatisch mit. Erledigte Quests: „Mehr machen“ oder „Zurücknehmen“.
 - Arena: bis zu 3 Gegner pro Tag, Wochen-Boss (Mo–So, 3–4 Phasen, immer mit einer Schritte-Phase). Treffer = per Kamera
   gezählte Wiederholungen/Zeit oder Daten aus Samsung Health.
 - Erfolge (Bronze/Silber/Gold), Werte mit Klasse (Krieger, Läufer, …) und Vergleich 7 Tage / seit Tag 1.
@@ -14,9 +19,10 @@ Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf E
 - Kamera-Zähler (MediaPipe Pose, läuft nur auf dem Handy; die meisten Übungen gehen von der Seite und von vorne, die App sagt, wenn die Ansicht nicht passt) und Samsung Health über Health Connect (Schritte, Läufe,
   Radfahren, Schwimmen, Stockwerke, Krafttraining).
 - **Nachweis-Pflicht:** Jede Quest und jeder Arena-Treffer braucht einen Nachweis (`proof.ts`): Kamera zählt (Wiederholungen,
-  Halten), Dehn-Routine (5 Dehnungen à 30 s vor der Kamera), Kamera-Zeit (Zeit läuft nur, solange man im Bild ist),
+  Halten), Dehn-Routine (5 Dehnungen à 30 s vor der Kamera, zeigt, was gedehnt wird), Kamera-Zeit (Zeit läuft nur, solange man im Bild ist),
   Samsung Health (hakt automatisch ab) oder Foto der Seite (Lesen). Kein Abhaken von Hand.
-- Lesen als feste Tagesquest (abschaltbar): Buch anlegen, Seite mit Foto eintragen, letzte Seite gespeichert, Buch beenden.
+- Lesen als feste Tagesquest (abschaltbar): Buch anlegen (optional mit Cover-Foto und Seitenzahl, Fortschritt in %),
+  Seite mit Foto eintragen, letzte Seite gespeichert, Buch bearbeiten, Buch beenden (auf der letzten Seite fragt die App).
   Bringt das Attribut Intelligenz (Klasse „Gelehrter“).
 - Leichtere Varianten (Knie-Liegestütze, Australische Klimmzüge …) über `Profile.easyVariants`; die Kamera prüft dann die
   leichtere Ausführung.
@@ -61,7 +67,7 @@ src/achievements.ts  Erfolge
 src/store.ts         React-State, Speichern, Health-Connect-Abgleich
 src/health.ts        Brücke zu Health Connect (nur Android)
 src/views/           Bildschirme: Today, Arena, Stats, Achievements, Settings, Scanner, Reading, Onboarding, ui
-src/views/Reading.tsx  Lese-Sheet: Buch anlegen, Seite + Foto eintragen, Buch beenden
+src/views/Reading.tsx  Lese-Sheet: Buch anlegen (mit Cover-Foto und Seitenzahl), „Buch bearbeiten“, Seite + Foto eintragen, Buch beenden
 src/views/Icons.tsx  Linien-Icons und 3D-Abzeichen
 src/views/Sprites.tsx  die 14 Monster als SVG
 src/styles.css       Design („Clay Arena“), Farben als CSS-Variablen in :root

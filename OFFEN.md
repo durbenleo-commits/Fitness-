@@ -11,7 +11,10 @@ Erledigtes hier streichen, neue offene Punkte ergänzen.
 - Der Wochen-Boss hat immer eine Schritte-Phase (aus Samsung Health).
 - Ohne Samsung Health (Browser-Version oder Sync-Fehler) lässt sich die feste Schritte-Quest nicht erfüllen: kein Tagesbonus,
   keine Serie, Bosse mit Schritte-Phase sind nicht zu besiegen. So gewollt, aber im Blick behalten.
+- Pflicht und Extra: 4 feste Pflicht-Quests (Schritte, Liegestütze, Kniebeugen, Unterarmstütz) + Lesen, dazu 4 freiwillige
+  Extras. Jede Quest bis 2× (mehr XP, Bonus-Punkt). Bücher mit Cover und Seitenzahl, Dehn-Routine zeigt, was gedehnt wird.
 - Getestet: Spiellogik mit `npm test`, Oberfläche nur im Browser (Playwright, Pixel 7, Kamera simuliert).
+  Dass die Kamera echt über das Ziel hinaus bis 2× zählt, ist im Browser nicht prüfbar (simulierte Kamera zählt nichts).
 
 ## Auf Leos Handy prüfen
 
@@ -36,6 +39,12 @@ Kamera und Health Connect lassen sich nur auf dem echten Handy prüfen.
 - Hinweise „Dreh dich zur Seite“ / „frontal“ prüfen.
 - Quest-Aktualisierung bei Tageswechsel im Hintergrund (resume/focus) auf dem Handy prüfen.
 - Kamera-Berechtigung in der Android-App für das Seitenfoto (gleiche Berechtigung wie der Kamera-Zähler).
+- **Bis 2×**: Kamera zählt nach dem Ziel weiter („Geschafft! Weiter bis 2× für Bonus-XP“), „Fertig“ übernimmt die Zahl,
+  bei 2× schließt der Zähler von selbst. Auch „Mehr machen“ an einer erledigten Quest prüfen (zählt ab dem alten Stand weiter)
+  und dass Schließen (X) nach dem Ziel die Quest trotzdem abhakt.
+- **Cover-Foto**: Neues Buch mit Cover (Rückkamera, Ersatz über System-Kamera), Cover ändern/entfernen unter „Buch bearbeiten“.
+  Erkennt man das Buch auf dem 320-px-Bild in den Werten?
+- Letzte Seite eintragen → Frage „Buch als fertig markieren?“ auf dem Handy durchspielen.
 
 ## Entscheidung von Leo nötig: Belohnungen für Level und Werte
 
