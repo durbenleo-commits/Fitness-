@@ -11,7 +11,7 @@ Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf E
   gezählte Wiederholungen/Zeit oder Daten aus Samsung Health.
 - Erfolge (Bronze/Silber/Gold), Werte mit Klasse (Krieger, Läufer, …) und Vergleich 7 Tage / seit Tag 1.
 - Ausrüstung und Möglichkeiten (Hanteln, Schwimmbad, „keine Sprungübungen“ …) steuern, welche Übungen kommen.
-- Kamera-Zähler (MediaPipe Pose, läuft nur auf dem Handy) und Samsung Health über Health Connect (Schritte, Läufe,
+- Kamera-Zähler (MediaPipe Pose, läuft nur auf dem Handy; die meisten Übungen gehen von der Seite und von vorne, die App sagt, wenn die Ansicht nicht passt) und Samsung Health über Health Connect (Schritte, Läufe,
   Radfahren, Schwimmen, Stockwerke, Krafttraining).
 - **Nachweis-Pflicht:** Jede Quest und jeder Arena-Treffer braucht einen Nachweis (`proof.ts`): Kamera zählt (Wiederholungen,
   Halten), Dehn-Routine (5 Dehnungen à 30 s vor der Kamera), Kamera-Zeit (Zeit läuft nur, solange man im Bild ist),

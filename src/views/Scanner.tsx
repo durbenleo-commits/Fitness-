@@ -180,7 +180,13 @@ export function Scanner(props: {
   const statusText =
     status === 'loading'
       ? 'Kamera startet …'
-      : presence
+      : scan.wrongView === 'side'
+        ? 'Dreh dich zur Seite – diese Übung erkennt die Kamera nur von der Seite.'
+        : scan.wrongView === 'front'
+          ? 'Stell dich frontal vor die Kamera – diese Übung geht nur von vorne.'
+          : !scan.bodyVisible && scan.missing?.length
+            ? `Nicht zu sehen: ${scan.missing.join(', ')}`
+            : presence
         ? scan.bodyVisible
           ? 'Zeit läuft, bleib im Bild'
           : 'Bleib gut sichtbar im Bild'
@@ -196,6 +202,8 @@ export function Scanner(props: {
               ? 'Und wieder hoch'
               : 'Los geht’s';
 
+  const viewLabel = (v: string | undefined) => (v === 'side' ? 'Nur von der Seite' : v === 'front' ? 'Nur von vorne' : 'Geht von der Seite und von vorne');
+  const wrongShown = !!scan.wrongView && !done;
   const pose = stretch ? STRETCH_POSES[scan.poseIndex ?? 0] : undefined;
   const poseSec = Math.min(Math.floor((scan.poseMs ?? 0) / 1000), STRETCH_POSE_MS / 1000);
   const shownAmount = presence || stretch ? fmtTime(amount) : String(amount);
@@ -236,7 +244,12 @@ export function Scanner(props: {
         </div>
       ) : (
         <footer className="scanner-bottom">
-          {status === 'loading' && <p className="scanner-setup">{spec.setup}</p>}
+          {status === 'loading' && (
+            <>
+              <p className="scanner-setup">{spec.setup}</p>
+              <span className="view-chip">{viewLabel(spec.view)}</span>
+            </>
+          )}
           {pose && status === 'running' && !done && (
             <div className={`pose-card ${scan.inPosition ? 'holding' : ''}`}>
               <div className="pose-head">
@@ -244,6 +257,7 @@ export function Scanner(props: {
                   Dehnung {(scan.poseIndex ?? 0) + 1}/{STRETCH_POSES.length}
                 </span>
                 <strong>{pose.name}</strong>
+                {pose.view && pose.view !== 'any' && <span className="view-chip small">{viewLabel(pose.view)}</span>}
                 <span className="pose-time display">
                   {poseSec}/{STRETCH_POSE_MS / 1000} s
                 </span>
@@ -261,7 +275,10 @@ export function Scanner(props: {
               {stretch && <small>Gesamtzeit</small>}
             </span>
           </div>
-          <p className={`scanner-status ${scan.bodyVisible ? 'ok' : ''}`} aria-live="polite">
+          {status === 'running' && scan.view && scan.bodyVisible && !wrongShown && (
+            <span className="view-chip">{scan.view === 'side' ? 'Von der Seite erkannt' : 'Von vorne erkannt'}</span>
+          )}
+          <p className={`scanner-status ${scan.bodyVisible && !wrongShown ? 'ok' : ''}`} aria-live="polite">
             {done ? 'Geschafft!' : statusText}
           </p>
           {allowPartial ? (

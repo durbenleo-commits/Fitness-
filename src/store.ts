@@ -60,10 +60,18 @@ export function useToday(): string {
   const [today, setToday] = useState(() => toDateKey(new Date()));
   useEffect(() => {
     const refresh = () => setToday(toDateKey(new Date()));
-    document.addEventListener('visibilitychange', refresh);
+    // Timers can sleep in a background WebView, and visibilitychange is not reliable on resume:
+    // also listen to focus, pageshow and Capacitor's document 'resume' event.
+    const targets: [EventTarget, string][] = [
+      [document, 'visibilitychange'],
+      [document, 'resume'],
+      [window, 'focus'],
+      [window, 'pageshow'],
+    ];
+    targets.forEach(([t, ev]) => t.addEventListener(ev, refresh));
     const timer = window.setInterval(refresh, 60_000);
     return () => {
-      document.removeEventListener('visibilitychange', refresh);
+      targets.forEach(([t, ev]) => t.removeEventListener(ev, refresh));
       window.clearInterval(timer);
     };
   }, []);

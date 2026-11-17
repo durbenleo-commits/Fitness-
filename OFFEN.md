@@ -30,6 +30,11 @@ Kamera und Health Connect lassen sich nur auf dem echten Handy prüfen.
   Krafttraining (Gerätetraining). Prüfen, ob Samsung Health diese Trainings an Health Connect gibt und ob die Minuten stimmen.
 - **Seitenfoto**: Rückkamera im WebView (getUserMedia mit `facingMode: environment`) und der Ersatz über die
   System-Kamera (`<input capture>`) auf dem Handy ausprobieren. Ist das 320 px breite Foto lesbar genug als Nachweis?
+- Unterarmstütz und Liegestütze von vorne (Handy vor dem Kopf) auf dem Handy testen.
+- Neue Frontansichten testen: Kniebeugen, Ausfallschritte, Wandsitzen, Bizepsbeugen, Hockstrecksprünge, Klimmzüge
+  (jetzt Kinn über die Stange).
+- Hinweise „Dreh dich zur Seite“ / „frontal“ prüfen.
+- Quest-Aktualisierung bei Tageswechsel im Hintergrund (resume/focus) auf dem Handy prüfen.
 - Kamera-Berechtigung in der Android-App für das Seitenfoto (gleiche Berechtigung wie der Kamera-Zähler).
 
 ## Entscheidung von Leo nötig: Belohnungen für Level und Werte
