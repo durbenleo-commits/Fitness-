@@ -27,6 +27,25 @@ const P: Record<string, JSX.Element> = {
       <circle cx="18" cy="18" r="2" />
     </>
   ),
+  menu: (
+    <>
+      <rect x="4" y="4" width="6.5" height="6.5" rx="2" />
+      <rect x="13.5" y="4" width="6.5" height="6.5" rx="2" />
+      <rect x="4" y="13.5" width="6.5" height="6.5" rx="2" />
+      <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2" />
+    </>
+  ),
+  chevronRight: <path d="M9.5 5.5L16 12l-6.5 6.5" />,
+  chevronLeft: <path d="M14.5 5.5L8 12l6.5 6.5" />,
+  // a path of three steps, rising: mastery
+  path: (
+    <>
+      <circle cx="5.5" cy="18.5" r="2.5" />
+      <circle cx="12" cy="12" r="2.5" />
+      <circle cx="18.5" cy="5.5" r="2.5" />
+      <path d="M7.3 16.7l2.9-2.9M13.8 10.2l2.9-2.9" />
+    </>
+  ),
   // attributes
   staerke: <path d="M3 10v4M6 7v10M6 12h12M18 7v10M21 10v4" />,
   ausdauer: <path d="M2 12h4l3-7 5 14 3-7h5" />,
@@ -118,6 +137,7 @@ const P: Record<string, JSX.Element> = {
   treadmill: <path d="M3 18h15a2 2 0 0 0 0-4H5M16 14l2-9h3M7 18v2M15 18v2" />,
   pool: <path d="M2 17c2 2 4 2 6 0s4-2 6 0 4 2 6 0M2 21c2 2 4 2 6 0s4-2 6 0 4 2 6 0M8 14V5a2 2 0 0 1 4 0M14 14V5a2 2 0 0 1 4 0M8 9h6" />,
   gym: <path d="M4 21V8l8-5 8 5v13M9 21v-6h6v6M8 11h8" />,
+  play: <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM10 8.5v7l5.5-3.5z" />,
 };
 
 export type IconName = keyof typeof P;

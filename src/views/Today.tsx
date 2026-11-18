@@ -3,6 +3,7 @@ import { currentEnemy, hpLeft } from '../battle';
 import {
   ATTR_LABEL,
   DAY_CLEAR_BONUS,
+  canSwitchVariant,
   REROLLS_PER_DAY,
   formatDate,
   bestStreak,
@@ -10,6 +11,8 @@ import {
   isCleared,
   isDoubled,
   isLegacyDay,
+  newlyUnlocked,
+  reachedGoal,
   isSwappable,
   maxAchieved,
   questAchieved,
@@ -29,7 +32,9 @@ import type { Game } from '../store';
 import { PRESENCE, STRETCH_FOCUS } from '../pose';
 import { healthProgress, proofFor, questMaxTarget, questTarget, scanToAchieved, type HealthMetric, type ProofKind } from '../proof';
 import { pagesReadOn } from '../reading';
+import { hasExerciseAnim } from '../anim/exercises';
 import { AttrTile, Badge3D, Icon } from './Icons';
+import { ExerciseGuide } from './ExerciseGuide';
 import { ReadingSheet } from './Reading';
 import { Scanner } from './Scanner';
 import { Sprite } from './Sprites';
@@ -81,7 +86,8 @@ type Flow =
   | { kind: 'scan'; quest: QuestInstance; scanId: string; target: number; max: number; base: number; perUnit?: number }
   | { kind: 'health'; quest: QuestInstance; metric: HealthMetric }
   | { kind: 'read' }
-  | { kind: 'done'; quest: QuestInstance };
+  | { kind: 'done'; quest: QuestInstance }
+  | { kind: 'guide'; questId: string };
 
 export function TodayView({ game, today, onOpenArena }: { game: Game; today: string; onOpenArena: () => void }) {
   const { state } = game;
@@ -116,6 +122,9 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
   const enemy = currentEnemy(state.battles, today);
   const dayNo = Math.min(seasonDay(state.profile, today), state.profile.seasonDays);
   const wins = state.battles.filter((b) => b.defeatedOn).length;
+  // exercises whose prerequisites were mastered since the player last closed the note
+  const unlocked = newlyUnlocked(state);
+  const goalDone = reachedGoal(state);
   const visible = (q: QuestInstance) => (filter === 'open' ? !q.done || justDone.includes(q.id) : q.done);
   const mood =
     done === 0 && extrasDone === 0
@@ -169,6 +178,9 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         swappable={swappable}
         proof={proofFor(q, custom).kind}
         note={questNote(state, today, q)}
+        canSwitch={!swapping && canSwitchVariant(q, custom)}
+        onSwitch={() => game.setQuestVariant(q.id, !q.easy)}
+        onGuide={!swapping && !custom.some((t) => t.id === q.templateId) && hasExerciseAnim(q.templateId) ? () => setFlow({ kind: 'guide', questId: q.id }) : undefined}
         onTap={() => {
           if (!swapping) return startProof(q);
           if (!swappable) return;
@@ -214,6 +226,28 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         </h1>
         <p className="day-mood">{mood}</p>
       </div>
+
+      {(unlocked.length > 0 || goalDone) && (
+        <div className="unlock-note" role="status">
+          <Icon name="star" size={18} />
+          <span>
+            {goalDone && (
+              <>
+                <strong>Ziel erreicht:</strong> {goalDone.title} ist freigeschaltet.{' '}
+              </>
+            )}
+            {unlocked.some((t) => t.id !== goalDone?.id) && (
+              <>
+                <strong>Neu freigeschaltet:</strong> {unlocked.filter((t) => t.id !== goalDone?.id).map((t) => t.title).join(', ')}.{' '}
+              </>
+            )}
+            Kann ab morgen in den Extras kommen.
+          </span>
+          <button className="link-button" onClick={game.markUnlocksSeen}>
+            OK
+          </button>
+        </div>
+      )}
 
       <div className="filter-tabs" role="tablist" aria-label="Quests filtern">
         <button role="tab" aria-selected={filter === 'open'} onClick={() => setFilter('open')}>
@@ -346,6 +380,12 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         />
       )}
 
+      {flow?.kind === 'guide' &&
+        (() => {
+          const q = day.quests.find((x) => x.id === flow.questId);
+          return q ? <QuestGuide quest={q} canSwitch={canSwitchVariant(q, custom)} onApply={(easy) => game.setQuestVariant(q.id, easy)} onClose={close} /> : null;
+        })()}
+
       {enemy && (
         <button className={`arena-teaser attr-${enemy.attr} ${enemy.defeatedOn ? 'won' : ''}`} onClick={onOpenArena}>
           <Sprite enemyId={enemy.enemyId} className="teaser-monster" />
@@ -374,6 +414,11 @@ const percentOf = (q: QuestInstance) => Math.round((questAchieved(q) / q.amount)
  * XP. Done quests show the XP earned, and how much was done when it is more than asked.
  */
 function questNote(state: GameState, today: string, q: QuestInstance): string {
+  const note = questNoteBase(state, today, q);
+  return q.bonus ? `${note} · Ausdauer-Bonus +25 %` : note;
+}
+
+function questNoteBase(state: GameState, today: string, q: QuestInstance): string {
   if (q.done) {
     const xp = `+${questXp(q)} XP`;
     const got = questAchieved(q);
@@ -398,9 +443,13 @@ function QuestRow(props: {
   swappable: boolean;
   proof: ProofKind;
   note: string;
+  canSwitch: boolean;
+  onSwitch: () => void;
   onTap: () => void;
+  /** Opens the exercise guide; missing when the quest has no animation. */
+  onGuide?: () => void;
 }) {
-  const { quest: q, swapMode, swappable, proof, note, onTap } = props;
+  const { quest: q, swapMode, swappable, proof, note, canSwitch, onSwitch, onTap, onGuide } = props;
   const xp = questXp(q);
   const doubled = isDoubled(q);
   const [burst, setBurst] = useState<{ key: number; xp: number } | null>(null);
@@ -454,7 +503,60 @@ function QuestRow(props: {
           </span>
         )}
       </button>
+      {(canSwitch || onGuide) && (
+        <div className="quest-tools">
+          {onGuide && (
+            <button type="button" className="guide-link" onClick={onGuide} aria-label={`${q.title}: Anleitung mit Animation`}>
+              <Icon name="play" size={16} />
+              Anleitung
+            </button>
+          )}
+          {canSwitch && (
+            <button
+              className="link-button"
+              style={{ fontSize: '0.8rem', padding: '0.25rem 0.4rem' }}
+              onClick={onSwitch}
+              aria-label={q.easy ? `${q.title}: normale Ausführung, volle XP` : `${q.title}: leichtere Ausführung, weniger XP`}
+            >
+              {q.easy ? 'Normal' : 'Leichter'}
+            </button>
+          )}
+        </div>
+      )}
     </li>
+  );
+}
+
+/**
+ * "Anleitung" for one quest: starts on the quest's current variant. Switching inside is a preview; while the
+ * quest is open and switchable, "Diese Version nehmen" applies the shown variant to the quest.
+ */
+function QuestGuide({ quest: q, canSwitch, onApply, onClose }: { quest: QuestInstance; canSwitch: boolean; onApply: (easy: boolean) => void; onClose: () => void }) {
+  const [shown, setShown] = useState(!!q.easy);
+  const differs = shown !== !!q.easy;
+  return (
+    <ExerciseGuide
+      exerciseId={q.templateId}
+      easy={!!q.easy}
+      onEasyChange={setShown}
+      onClose={onClose}
+      footer={
+        differs &&
+        (canSwitch ? (
+          <button
+            className="primary"
+            onClick={() => {
+              onApply(shown);
+              onClose();
+            }}
+          >
+            Diese Version nehmen
+          </button>
+        ) : (
+          <p className="xguide-note">Nur Vorschau: Deine Quest bleibt {q.easy ? 'leichter' : 'normal'}{q.done ? ', weil sie schon erledigt ist' : ''}.</p>
+        ))
+      }
+    />
   );
 }
 

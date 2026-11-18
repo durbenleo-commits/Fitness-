@@ -46,6 +46,14 @@ Kamera und Health Connect lassen sich nur auf dem echten Handy prüfen.
   Erkennt man das Buch auf dem 320-px-Bild in den Werten?
 - Letzte Seite eintragen → Frage „Buch als fertig markieren?“ auf dem Handy durchspielen.
 
+## Neu (Calisthenics, leichte Versionen, Animationen, Update-Meldung) – auf dem Handy prüfen
+
+- Kamera-Erkennung der 16 neuen Übungen ist nur mit erfundenen Körperpunkten getestet. Am unsichersten: Handstand an der Wand
+  (kopfüber), L-Sitz, Wadenheben, Seitstütz, Superman vs. Hollow Hold, Sprungkniebeugen. Diamant-Liegestütze nur von vorne
+  sicher (von der Seite zählt auch eine normale Liegestütze).
+- Update-Meldung: „Jetzt laden“ öffnet die APK über `window.open(url, '_system')` – auf dem Handy prüfen.
+- Animationen: schwächste sind Bergsteiger, Handstand, Radfahren, Seilspringen, Treppen (leicht), Ausfallschritte (leicht, Hand am Stuhl).
+
 ## Entscheidung von Leo nötig: Belohnungen für Level und Werte
 
 Vorschlag (noch nicht gebaut):
@@ -56,7 +64,7 @@ Vorschlag (noch nicht gebaut):
 - **Stärke 25**: mehr Elite-Gegner (mehr XP).
 - **Intelligenz 10**: weitere Lese-Erfolge.
 
-Leo fragen, was davon er will. Die Regeln gehören dann in `game.ts` / `battle.ts` mit Tests.
+Leo hat nur „Bonus-XP“ gewählt (gebaut: Ausdauer 25 = +25 % XP auf Läufe). Den Rest erst wieder anbieten, wenn er fragt. Die Regeln gehören dann in `game.ts` / `battle.ts` mit Tests.
 
 ## Kleinere Ideen
 

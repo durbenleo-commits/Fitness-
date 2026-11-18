@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Fitness-App als Videospiel: „Questfit“. Besitzer: Leo (GitHub `durbenleo-commits`, Repo `Fitness-`, privat).
+Fitness-App als Videospiel: „Questfit“. Besitzer: Leo (GitHub `durbenleo-commits`, Repo `Fitness-`, öffentlich).
 Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf Englisch.
 
 ## Was die App ist
@@ -16,6 +16,11 @@ Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf E
   gezählte Wiederholungen/Zeit oder Daten aus Samsung Health.
 - Erfolge (Bronze/Silber/Gold), Werte mit Klasse (Krieger, Läufer, …) und Vergleich 7 Tage / seit Tag 1.
 - Ausrüstung und Möglichkeiten (Hanteln, Schwimmbad, „keine Sprungübungen“ …) steuern, welche Übungen kommen.
+- Schwere Extra-Übungen sind gesperrt, bis beides erfüllt ist: Spieler-Level (`EXERCISE_MIN_LEVEL` in game.ts) und
+  Meisterschaft (`src/mastery.ts`: jede erledigte Quest = 1 Punkt pro Übung, leicht 0,5; Stufe 1/2/3 ab 3/10/25;
+  `PREREQUISITES`, z. B. Dips: Liegestütze Stufe 2). Gilt für Extras, Joker und Arena, nie für Pflicht und eigene Quests.
+  Today zeigt einmal „Neu freigeschaltet“ (`seenUnlocks`). Trainingsziel (`Profile.trainingGoal`, Meisterschaft „Als Ziel“) legt
+  bis zu 2 fehlende Vorstufen in die Extras neuer Tage.
 - Kamera-Zähler (MediaPipe Pose, läuft nur auf dem Handy; die meisten Übungen gehen von der Seite und von vorne, die App sagt, wenn die Ansicht nicht passt) und Samsung Health über Health Connect (Schritte, Läufe,
   Radfahren, Schwimmen, Stockwerke, Krafttraining).
 - **Nachweis-Pflicht:** Jede Quest und jeder Arena-Treffer braucht einen Nachweis (`proof.ts`): Kamera zählt (Wiederholungen,
@@ -40,7 +45,8 @@ Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf E
 
 - Jeder Push auf `main` startet den Workflow „Android APK“: Tests, Build, signierte APK, Release „Questfit N“.
 - Leo installiert über `https://github.com/durbenleo-commits/Fitness-/releases/latest` (Update über die alte App).
-- „Deploy to GitHub Pages“ läuft nur von Hand: Das Repo ist privat, Pages ist aus.
+- „Deploy to GitHub Pages“ läuft nur von Hand: Das Repo ist öffentlich, Pages ist aus.
+- Die App prüft beim Start auf neue Releases; „[pflicht]“ in der Commit-Nachricht macht das Update zur Pflicht.
 - Erst sagen, dass eine neue Version da ist, wenn der Release wirklich existiert (Actions/Releases prüfen).
 
 ## Befehle
@@ -58,6 +64,7 @@ Vor jedem Push: `npm test` und `npm run build` müssen grün sein.
 ## Aufbau
 
 ```
+src/mastery.ts       Meisterschaft: Punkte, Stufen, Voraussetzungen, Weg zum Trainingsziel (rein, getestet)
 src/game.ts          Spielregeln: Quests, Level, Serie, Saison, Ausrüstung, Varianten, Spielstand-Migration (normalize)
 src/proof.ts         Welcher Nachweis gilt für welche Quest / Arena-Phase (Kamera, Kamera-Zeit, Samsung Health, Foto)
 src/reading.ts       Bücher, Seiten pro Tag, Lese-Quest (nur über logPages mit Foto)
@@ -67,6 +74,12 @@ src/achievements.ts  Erfolge
 src/store.ts         React-State, Speichern, Health-Connect-Abgleich
 src/health.ts        Brücke zu Health Connect (nur Android)
 src/views/           Bildschirme: Today, Arena, Stats, Achievements, Settings, Scanner, Reading, Onboarding, ui
+src/App.tsx          Tabs Heute / Arena / Menü. Menü (views/Hub.tsx) öffnet Unterseiten per history.pushState
+                     (Zurück-Knopf oben, Browser-Zurück und Android-Zurück über @capacitor/app führen zurück zum Menü)
+src/views/Hub.tsx    Menü: gruppierte Zeilen mit Kurzinfo (Meisterschaft, Erfolge, Werte, Quests & Übungen, Lesen, Einstellungen)
+src/views/Mastery.tsx  Meisterschaft: Trainingsziel, Wege (SKILL_PATHS in mastery.ts) Stufe für Stufe, „Als Ziel“
+src/views/Exercises.tsx  Quests & Übungen: Pflicht-Liste, Extras an/aus (mit Anleitung), eigene Quests
+src/views/NavBar.tsx   Leiste einer Unterseite: Zurück + kleiner Titel beim Scrollen
 src/views/Reading.tsx  Lese-Sheet: Buch anlegen (mit Cover-Foto und Seitenzahl), „Buch bearbeiten“, Seite + Foto eintragen, Buch beenden
 src/views/Icons.tsx  Linien-Icons und 3D-Abzeichen
 src/views/Sprites.tsx  die 14 Monster als SVG

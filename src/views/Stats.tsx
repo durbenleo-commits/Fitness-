@@ -123,8 +123,6 @@ export function StatsView({ game, today, xp }: { game: Game; today: string; xp: 
         </div>
       </dl>
 
-      <Books game={game} today={today} />
-
       <History state={state} today={today} />
 
       <h2>Letzte 4 Wochen</h2>
@@ -288,7 +286,7 @@ function History({ state, today }: { state: GameState; today: string }) {
 const pagesOf = (b: Book) => b.log.reduce((s, l) => s + (l.to - l.from), 0);
 
 /** Reading log: the book on the nightstand, finished books, pages overall. */
-function Books({ game, today }: { game: Game; today: string }) {
+export function Books({ game, today }: { game: Game; today: string }) {
   const { state } = game;
   const [sheet, setSheet] = useState<'log' | 'new' | 'edit' | null>(null);
   const book = currentBook(state);

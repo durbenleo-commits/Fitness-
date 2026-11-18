@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureBattles, logDamage, settleBattles, undoDamage, type Battle } from './battle';
 import {
+  acknowledgeUnlocks,
   addDailyQuestToDay,
+  applyAusdauerBonus,
   autoCompleteFromHealth,
   completeQuest as completeQuestIn,
   dayOutdated,
@@ -12,7 +14,9 @@ import {
   normalize,
   randomPool,
   rerollQuest,
+  setQuestVariant as setQuestVariantIn,
   setReading as setReadingIn,
+  setTrainingGoal as setTrainingGoalIn,
   startNewSeason,
   toDateKey,
   totalXp,
@@ -114,7 +118,8 @@ export function useGame(today: string) {
   // Functional update: it must build on the latest state, never overwrite a pending one.
   useEffect(() => {
     setState((s) => {
-      const settled = settleBattles(autoCompleteFromHealth(s, today), today);
+      // the Ausdauer-Bonus goes on open run quests first (once, see applyAusdauerBonus), then health ticks off
+      const settled = settleBattles(autoCompleteFromHealth(applyAusdauerBonus(s, today), today), today);
       // a fresh enemy steps in once the current one falls
       return settled.profile ? ensureBattles(settled, today, currentLevel(settled)) : settled;
     });
@@ -221,6 +226,19 @@ export function useGame(today: string) {
     [today],
   );
 
+  /** Switch one open quest of today between normal and its easier variant (less XP). */
+  const setQuestVariant = useCallback(
+    (questId: string, easy: boolean) => {
+      setState((s) => {
+        const day = s.days[today];
+        if (!day) return s;
+        const next = setQuestVariantIn(day, questId, easy, s.customQuests);
+        return next === day ? s : { ...s, days: { ...s.days, [today]: next } };
+      });
+    },
+    [today],
+  );
+
   const updateProfile = useCallback((patch: Partial<Profile>) => {
     setState((s) => (s.profile ? { ...s, profile: { ...s.profile, ...patch } } : s));
   }, []);
@@ -317,6 +335,12 @@ export function useGame(today: string) {
     [today],
   );
 
+  /** The "Neu freigeschaltet" note on Today was closed: remember what was shown, clear a reached goal. */
+  const markUnlocksSeen = useCallback(() => setState((s) => acknowledgeUnlocks(s)), []);
+
+  /** Set (or clear with null) the training goal: a locked exercise whose prerequisites the extras then train. */
+  const setTrainingGoal = useCallback((id: string | null) => setState((s) => setTrainingGoalIn(s, id)), []);
+
   const replaceState = useCallback((next: GameState) => setState(normalize(next)), []);
   const resetAll = useCallback(() => setState(emptyState()), []);
 
@@ -329,6 +353,7 @@ export function useGame(today: string) {
     completeQuest,
     uncheckQuest,
     reroll,
+    setQuestVariant,
     updateProfile,
     addCustomQuest,
     removeCustomQuest,
@@ -340,6 +365,8 @@ export function useGame(today: string) {
     updateBook,
     logPages,
     undoPages,
+    markUnlocksSeen,
+    setTrainingGoal,
     replaceState,
     resetAll,
   };
