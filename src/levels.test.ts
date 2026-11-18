@@ -27,20 +27,20 @@ const locked = (level: number) => new Set(QUEST_POOL.filter((t) => (t.minLevel ?
 
 describe('exercise level gate', () => {
   it('reads the levels from EXERCISE_MIN_LEVEL and never gates core quests', () => {
-    expect(minLevel('pistol')).toBe(10);
-    expect(minLevel('handstand')).toBe(12);
-    expect(minLevel('dips')).toBe(2);
+    expect(minLevel('pistol')).toBe(25);
+    expect(minLevel('handstand')).toBe(30);
+    expect(minLevel('dips')).toBe(3);
     expect(minLevel('calves')).toBe(1);
     expect(minLevel('lunges')).toBe(1);
     for (const id of Object.keys(EXERCISE_MIN_LEVEL)) expect(QUEST_POOL.some((t) => t.id === id)).toBe(true);
     for (const t of QUEST_POOL) if (isCoreQuest(t.id) || t.fixed) expect(t.minLevel).toBeUndefined();
   });
 
-  it('pool at level 1 leaves out locked exercises, level 10 has pistol but not handstand', () => {
+  it('pool at level 1 leaves out locked exercises, level 25 has pistol but not handstand', () => {
     const at1 = randomPool(state(), 1).map((t) => t.id);
     for (const id of ['sideplank', 'dips', 'hollow', 'pike', 'chinups', 'pistol', 'handstand', 'lsit']) expect(at1).not.toContain(id);
     for (const id of ['calves', 'bridge', 'superman', 'legraises', 'lunges']) expect(at1).toContain(id);
-    const at10 = randomPool(state(), 10).map((t) => t.id);
+    const at10 = randomPool(state(), 25).map((t) => t.id);
     for (const id of ['sideplank', 'dips', 'pike', 'chinups', 'kneeraises', 'lsit', 'pistol']) expect(at10).toContain(id);
     expect(at10).not.toContain('handstand');
   });
@@ -56,8 +56,8 @@ describe('exercise level gate', () => {
     expect(randomPool(s, 1).some((t) => t.id === custom.id)).toBe(true);
     // generateDay itself also respects the gate, even with the full pool
     for (const date of dates) for (const q of extraQuests(generateDay(date, 1, 2))) expect(locked(1).has(q.templateId)).toBe(false);
-    // at level 12 the higher exercises do come up over time
-    const seen = new Set(dates.flatMap((d) => extraQuests(dayFor(s, d, 12)).map((q) => q.templateId)));
+    // at level 30 the higher exercises do come up over time
+    const seen = new Set(dates.flatMap((d) => extraQuests(dayFor(s, d, 30)).map((q) => q.templateId)));
     expect([...seen].some((id) => minLevel(id) >= 5)).toBe(true);
   });
 
@@ -84,7 +84,7 @@ describe('exercise level gate', () => {
       for (const b of s.battles) for (const p of b.phases) if (p.exerciseId) expect(locked(1).has(p.exerciseId)).toBe(false);
     }
     // with a high level the same pool lets locked-at-1 exercises in
-    const high = dates.flatMap((d) => generateEnemy(d, 12, 2, gatedOnly).phases.map((p) => p.exerciseId ?? ''));
+    const high = dates.flatMap((d) => generateEnemy(d, 30, 2, gatedOnly).phases.map((p) => p.exerciseId ?? ''));
     expect(high.some((id) => minLevel(id) > 1)).toBe(true);
   });
 
@@ -118,9 +118,9 @@ describe('exercise level gate', () => {
 
 describe('unlock note', () => {
   it('lists what a level-up unlocks (possible with the equipment)', () => {
-    expect(newlyUnlocked(1, 2, profile).map((t) => t.id).sort()).toEqual(['dips', 'sideplank']);
-    expect(newlyUnlocked(4, 5, profile).map((t) => t.id).sort()).toEqual(['chinups', 'pike', 'splitsquat']);
-    expect(newlyUnlocked(4, 5, { ...profile, equipment: [] }).map((t) => t.id).sort()).toEqual(['pike', 'splitsquat']);
+    expect(newlyUnlocked(2, 3, profile).map((t) => t.id).sort()).toEqual(['dips', 'sideplank']);
+    expect(newlyUnlocked(7, 8, profile).map((t) => t.id).sort()).toEqual(['chinups', 'pike', 'splitsquat']);
+    expect(newlyUnlocked(7, 8, { ...profile, equipment: [] }).map((t) => t.id).sort()).toEqual(['pike', 'splitsquat']);
     expect(newlyUnlocked(10, 10, profile)).toEqual([]);
   });
 

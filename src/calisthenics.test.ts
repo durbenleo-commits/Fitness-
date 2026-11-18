@@ -186,7 +186,7 @@ describe('easy variants give less XP', () => {
 });
 
 describe('switching one quest between normal and easy', () => {
-  const day = (): DayLog => generateDay(TODAY, 2, 2, QUEST_POOL.filter((t) => t.fixed || t.id === 'dips')) // dips from level 2;
+  const day = (): DayLog => generateDay(TODAY, 3, 2, QUEST_POOL.filter((t) => t.fixed || t.id === 'dips')) // dips from level 3;
   const find = (d: DayLog, id: string) => d.quests.find((q) => q.templateId === id)!;
 
   it('switches an open quest to easy and back', () => {
