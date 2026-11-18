@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { OWN_BUILD, checkForUpdate } from '../updateCheck';
 import { DIFFICULTY_LABEL, QUEST_POOL, isGameState, readingOn, toDateKey, type Difficulty } from '../game';
 import type { Game } from '../store';
 import { SCANNABLE, STRETCH } from '../pose';
@@ -60,6 +61,8 @@ export function SettingsView({ game }: { game: Game }) {
       <ProofSection />
 
       <HealthSection game={game} />
+
+      <VersionSection />
 
       <div className="field">
         <span>Backup</span>
@@ -295,6 +298,43 @@ function ProofSection() {
         </li>
       </ul>
       <p className="small-text">Die Kamerabilder bleiben auf dem Handy und werden nirgends gespeichert. Nur das letzte Seitenfoto pro Buch wird klein gespeichert.</p>
+    </div>
+  );
+}
+
+function VersionSection() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    const r = await checkForUpdate('manual');
+    setBusy(false);
+    if (!r) setResult('Du hast die neueste Version.');
+    else if (r.kind === 'current') setResult('Du hast die neueste Version.');
+    else if (r.kind === 'newer') setResult(`Questfit ${r.release.build} ist verfügbar.`);
+    else setResult(`Keine Verbindung zu GitHub${r.status ? ` (Fehler ${r.status})` : ''}.`);
+  };
+
+  return (
+    <div className="field">
+      <span>App-Version</span>
+      <p className="small-text">{OWN_BUILD > 0 ? `Questfit ${OWN_BUILD}` : 'Browser-Version'}</p>
+      {OWN_BUILD > 0 && (
+        <>
+          <div className="row">
+            <button className="secondary" onClick={run} disabled={busy}>
+              {busy ? 'Suche …' : 'Nach Updates suchen'}
+            </button>
+          </div>
+          {result && (
+            <p className="small-text" role="status">
+              {result}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }

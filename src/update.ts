@@ -2,7 +2,8 @@
 
 export const RELEASE_API = 'https://api.github.com/repos/durbenleo-commits/Fitness-/releases/latest';
 export const RELEASE_PAGE = 'https://github.com/durbenleo-commits/Fitness-/releases/latest';
-export const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+/** Throttle for checks on resume/visibilitychange. App start and the manual button always check. */
+export const CHECK_INTERVAL_MS = 15 * 60 * 1000;
 export const REQUIRED_MARKER = '[pflicht]';
 
 export interface ReleaseInfo {
@@ -53,6 +54,13 @@ export function ownBuild(raw: unknown): number {
 
 export function isNewer(latest: number, own: number): boolean {
   return own > 0 && latest > own;
+}
+
+export type CheckReason = 'start' | 'resume' | 'manual';
+
+/** Start and manual checks ignore the throttle; resume checks follow shouldCheck. */
+export function checkDue(reason: CheckReason, lastCheck: number | null, now: number): boolean {
+  return reason !== 'resume' || shouldCheck(lastCheck, now);
 }
 
 /** True if a check is due: never checked, clock went backwards, or interval elapsed. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHECK_INTERVAL_MS, RELEASE_PAGE, applyCheck, isNewer, parseRequiredBuild, ownBuild, parseBuild, parseRelease, parseStoredRelease, shouldCheck } from './update';
+import { CHECK_INTERVAL_MS, RELEASE_PAGE, applyCheck, checkDue, isNewer, parseRequiredBuild, ownBuild, parseBuild, parseRelease, parseStoredRelease, shouldCheck } from './update';
 
 describe('update check', () => {
   it('parses apk tags', () => {
@@ -39,7 +39,7 @@ describe('update check', () => {
     expect(parseRelease(null)).toBeNull();
   });
 
-  it('throttles to 6 hours', () => {
+  it('throttles resume checks', () => {
     const now = 1_000_000_000_000;
     expect(shouldCheck(null, now)).toBe(true);
     expect(shouldCheck(now - 1000, now)).toBe(false);
@@ -84,4 +84,21 @@ describe('update check', () => {
     expect(parseRequiredBuild('x', 5)).toBe(0);
   });
 
+});
+
+describe('check throttle by reason', () => {
+  const now = 1_000_000_000;
+  it('interval is 15 minutes', () => {
+    expect(CHECK_INTERVAL_MS).toBe(15 * 60 * 1000);
+  });
+  it('start and manual always check, even right after a check', () => {
+    expect(checkDue('start', now - 1000, now)).toBe(true);
+    expect(checkDue('manual', now - 1000, now)).toBe(true);
+  });
+  it('resume is throttled to 15 minutes', () => {
+    expect(checkDue('resume', null, now)).toBe(true);
+    expect(checkDue('resume', now - 14 * 60 * 1000, now)).toBe(false);
+    expect(checkDue('resume', now - 15 * 60 * 1000, now)).toBe(true);
+    expect(checkDue('resume', now + 5000, now)).toBe(true);
+  });
 });
