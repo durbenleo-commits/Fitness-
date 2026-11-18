@@ -5,7 +5,6 @@ import {
   addDays,
   battlePool,
   daysBetween,
-  isUnlocked,
   scaleFactor,
   type Difficulty,
   type GameState,
@@ -123,9 +122,6 @@ const DIFF_ONLY: Record<Difficulty, number> = { 1: 0.6, 2: 1, 3: 1.5 };
 
 const roundTo = (v: number, step: number) => Math.max(step, Number((Math.round(v / step) * step).toFixed(1)));
 
-/** Exercises of `pool` the player's level allows (see EXERCISE_MIN_LEVEL). Locked ones are swapped like missing equipment. */
-const unlockedAt = (pool: QuestTemplate[], level: number) => pool.filter((q) => isUnlocked(q, level));
-
 /**
  * Swap moves the player cannot do (missing equipment, switched off) for a possible
  * exercise of the same attribute, keeping the same relative effort.
@@ -212,7 +208,7 @@ export function generateEnemy(
     start: date,
     end: date,
     xp: Math.round((40 + 4 * level) * (elite ? 1.6 : 1) * WAVE_XP[wave - 1]),
-    phases: e.moves.map((m, i) => makePhase(adaptMove(m, e.attr, unlockedAt(pool, level), rand), level, difficulty, factor, i, easy)),
+    phases: e.moves.map((m, i) => makePhase(adaptMove(m, e.attr, pool, rand), level, difficulty, factor, i, easy)),
   };
 }
 
@@ -261,7 +257,7 @@ export function generateBoss(
     start: date,
     end: addDays(start, 6),
     xp: 200 + 15 * level,
-    phases: dedupe(bossMoves(b).map((m) => adaptMove(m, b.attr, unlockedAt(pool, level), rand))).map((m, i) => makePhase(m, level, difficulty, 1, i, easy)),
+    phases: dedupe(bossMoves(b).map((m) => adaptMove(m, b.attr, pool, rand))).map((m, i) => makePhase(m, level, difficulty, 1, i, easy)),
   };
 }
 
@@ -339,7 +335,7 @@ export function ensureBattles(state: GameState, today: string, level: number): G
   if (!state.profile) return state;
   const add: Battle[] = [];
   const has = (id: string) => state.battles.some((b) => b.id === id);
-  const pool = battlePool(state, level);
+  const pool = battlePool(state); // gated by mastery: locked exercises are swapped like missing gear
   const easy = !!state.profile.easyVariants;
   const todays = enemiesOf(state.battles, today);
   if (todays.length === 0) {

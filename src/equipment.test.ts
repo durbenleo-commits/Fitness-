@@ -1,9 +1,10 @@
+import { ALL_MASTERED } from './mastery';
 import { describe, expect, it } from 'vitest';
 import { generateBoss, generateEnemy, ensureBattles, BOSSES } from './battle';
 import { QUEST_POOL, emptyState, hasEquipment, randomPool, unavailableReason, type GameState, type Profile } from './game';
 
 const base: Profile = { name: 'A', difficulty: 2, seasonDays: 66, startDate: '2026-11-01' };
-const ids = (p: Profile) => randomPool({ customQuests: [], disabledQuests: [], profile: p }, 99).map((q) => q.id);
+const ids = (p: Profile) => randomPool({ customQuests: [], disabledQuests: [], profile: p }, ALL_MASTERED).map((q) => q.id);
 
 describe('equipment', () => {
   it('keeps old saves on bodyweight plus outdoor and stairs', () => {
@@ -39,7 +40,7 @@ describe('equipment', () => {
 });
 
 describe('enemies adapt to what is possible', () => {
-  const pool = randomPool({ customQuests: [], disabledQuests: [], profile: { ...base, equipment: [], noJumping: true } }, 99);
+  const pool = randomPool({ customQuests: [], disabledQuests: [], profile: { ...base, equipment: [], noJumping: true } }, ALL_MASTERED);
   const allowed = new Set(pool.map((q) => q.id));
 
   it('never asks for impossible exercises', () => {

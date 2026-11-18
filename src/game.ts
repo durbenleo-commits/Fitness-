@@ -2,6 +2,7 @@
 import type { Battle, HealthDay } from './battle';
 import { metricValue, proofFor } from './proof';
 import type { Book } from './reading';
+import { isUnlocked as masteryUnlocked, masteryPoints, trainingSteps, unlockedGatedIds, PREREQUISITES, type MasteryPoints } from './mastery';
 import type { IconName } from './views/Icons';
 
 export type Attr = 'staerke' | 'ausdauer' | 'beweglichkeit' | 'intelligenz' | 'disziplin';
@@ -41,7 +42,6 @@ export interface QuestTemplate {
   jump?: boolean; // involves jumping (left out with "no jumping")
   fixed?: boolean; // appears every day
   retired?: boolean; // no longer handed out
-  minLevel?: number; // drawn as an extra / in the arena only from this player level on; missing = 1 (see EXERCISE_MIN_LEVEL)
 }
 
 export type Equipment =
@@ -140,44 +140,7 @@ const BASE_POOL: QuestTemplate[] = [
   { id: 'read', title: 'Lesen', icon: '📖', attr: 'intelligenz', base: 10, step: 1, unit: 'Seiten', xp: 30, noLevelScale: true, fixed: true },
 ];
 
-/**
- * Player level from which an exercise may come up as a rotating extra or in the arena.
- * Not listed = level 1. Core quests and custom quests are never gated; saved days keep what they hold.
- */
-export const EXERCISE_MIN_LEVEL: Record<string, number> = {
-  calves: 1,
-  bridge: 1,
-  superman: 1,
-  legraises: 1,
-  sideplank: 3,
-  dips: 3,
-  hollow: 5,
-  diamond: 5,
-  jumpsquats: 5,
-  pike: 8,
-  splitsquat: 8,
-  chinups: 8,
-  kneeraises: 15,
-  lsit: 20,
-  pistol: 25,
-  handstand: 30,
-};
-
-export const QUEST_POOL: QuestTemplate[] = BASE_POOL.map((t) =>
-  (EXERCISE_MIN_LEVEL[t.id] ?? 1) > 1 && !['steps', 'pushups', 'squats', 'plank'].includes(t.id) ? { ...t, minLevel: EXERCISE_MIN_LEVEL[t.id] } : t,
-);
-
-/** Level from which a template may be drawn (1 if not gated). */
-export const minLevelOf = (t: Pick<QuestTemplate, 'minLevel'>) => t.minLevel ?? 1;
-/** Whether the player's level allows this template as an extra / arena exercise. */
-export const isUnlocked = (t: Pick<QuestTemplate, 'minLevel'>, level: number) => minLevelOf(t) <= level;
-
-/** Built-in extra exercises unlocked by going from level `from` to level `to` (from < minLevel <= to). */
-export function newlyUnlocked(from: number, to: number, profile?: Profile | null): QuestTemplate[] {
-  return QUEST_POOL.filter(
-    (t) => !t.fixed && !t.retired && minLevelOf(t) > from && minLevelOf(t) <= to && !unavailableReason(t, profile),
-  );
-}
+export const QUEST_POOL: QuestTemplate[] = BASE_POOL;
 
 /** Template id of the daily reading quest. */
 export const READ_QUEST = 'read';
@@ -291,6 +254,7 @@ export interface Profile {
   cameraRequired?: boolean; // exercises the camera can count must be done in front of it
   easyVariants?: boolean; // hand out easier variants where there is one; missing = false
   reading?: boolean; // daily reading quest; missing = true
+  trainingGoal?: string; // locked exercise the player works towards (see mastery.ts); extras then include its prerequisites
 }
 
 /** Reading is on unless the player switched it off. */
@@ -312,7 +276,8 @@ export interface GameState {
   battles: Battle[];
   health: HealthState;
   reading: ReadingState;
-  seenUnlockLevel: number; // level up to which "Neu freigeschaltet" was shown; missing in old saves = current level
+  seenUnlocks: string[]; // gated exercises whose "Neu freigeschaltet" note was seen; missing in old saves = all unlocked then
+  seenUnlockLevel?: number; // unused: from the short-lived level gate, kept so such saves stay as they are
 }
 
 /** Reading log: books with their page entries (see reading.ts). */
@@ -343,7 +308,7 @@ export const emptyState = (): GameState => ({
   battles: [],
   health: { connected: false, days: {} },
   reading: { books: [] },
-  seenUnlockLevel: 1,
+  seenUnlocks: [],
 });
 
 // ---------- dates ----------
@@ -407,21 +372,24 @@ export function rankFor(level: number): string {
 
 // ---------- quest pool ----------
 
+/** Built-in exercise whose prerequisites (mastery.ts) are met. Custom quests are never gated. */
+export const exerciseUnlocked = (points: MasteryPoints, t: Pick<QuestTemplate, 'id' | 'custom'>) => !!t.custom || masteryUnlocked(points, t.id);
+
+type PoolState = Pick<GameState, 'customQuests' | 'disabledQuests'> & { profile?: Profile | null; days?: Record<string, DayLog> };
+
 /**
- * Templates that may be drawn at random: enabled built-ins unlocked at `level`, plus non-daily
- * custom quests (never gated). If everything is switched off, all possible unlocked built-ins.
+ * Templates that may be drawn at random: enabled built-ins whose prerequisites are mastered
+ * (from the saved days), plus non-daily custom quests (never gated). If everything is switched
+ * off, all possible unlocked built-ins. `points` overrides the mastery (tests).
  */
-export function randomPool(
-  state: Pick<GameState, 'customQuests' | 'disabledQuests'> & { profile?: Profile | null },
-  level: number,
-): QuestTemplate[] {
-  const possible = QUEST_POOL.filter((q) => !q.fixed && !q.retired && isUnlocked(q, level) && !unavailableReason(q, state.profile));
+export function randomPool(state: PoolState, points: MasteryPoints = masteryPoints(state.days ?? {})): QuestTemplate[] {
+  const possible = QUEST_POOL.filter((q) => !q.fixed && !q.retired && exerciseUnlocked(points, q) && !unavailableReason(q, state.profile));
   const pool = [...possible.filter((q) => !state.disabledQuests.includes(q.id)), ...state.customQuests.filter((q) => !q.daily)];
   return pool.length > 0 ? pool : possible;
 }
 
 /** Built-in exercises that are possible, unlocked and switched on: what enemies may ask for. */
-export const battlePool = (state: GameState, level: number) => randomPool(state, level).filter((q) => !q.custom);
+export const battlePool = (state: GameState, points?: MasteryPoints) => randomPool(state, points).filter((q) => !q.custom);
 
 export const dailyQuests = (state: Pick<GameState, 'customQuests'>) => state.customQuests.filter((q) => q.daily);
 
@@ -535,7 +503,8 @@ const extraCandidate = (t: QuestTemplate) => !t.fixed && !t.retired && !CORE_IDS
  * A day: the fixed quests (core quests, reading) in fixed order, then EXTRA_QUESTS_PER_DAY
  * rotating extras ("Extra", flagged `extra`), then daily custom quests. Extras are drawn from
  * `pool`: one per physical attribute where the pool allows, filled up at random, all different
- * and never one of the fixed quests. Extras are optional: they give XP and attribute points but
+ * and never one of the fixed quests. `prefer` (the training goal's next steps) go first when the
+ * pool holds them. The mastery gate lives in the pool (randomPool). Extras are optional: they give XP and attribute points but
  * are not needed to clear the day.
  */
 export function generateDay(
@@ -546,13 +515,16 @@ export function generateDay(
   daily: QuestTemplate[] = [],
   fixed: QuestTemplate[] = FIXED_QUESTS,
   easy = false,
+  prefer: QuestTemplate[] = [],
 ): DayLog {
   const rand = mulberry32(hash(date));
   const pick = (list: QuestTemplate[]) => list[Math.floor(rand() * list.length)];
   const fixedIds = new Set(fixed.map((t) => t.id));
-  const random = pool.filter((q) => extraCandidate(q) && isUnlocked(q, level) && !fixedIds.has(q.id));
-  const extras: QuestTemplate[] = [];
+  const random = pool.filter((q) => extraCandidate(q) && !fixedIds.has(q.id));
+  // training goal: its next steps come first (at most GOAL_EXTRAS, only from the pool)
+  const extras: QuestTemplate[] = prefer.filter((t) => random.includes(t)).slice(0, GOAL_EXTRAS);
   for (const attr of QUEST_ATTRS) {
+    if (extras.some((q) => q.attr === attr)) continue;
     const options = random.filter((q) => q.attr === attr && !extras.includes(q));
     if (options.length > 0 && extras.length < EXTRA_QUESTS_PER_DAY) extras.push(pick(options));
   }
@@ -598,7 +570,7 @@ export function isSwappable(day: DayLog, q: QuestInstance, customQuests: QuestTe
   return !pinned;
 }
 
-/** Swap one extra quest for a different one of the same attribute (or any, if none left). */
+/** Swap one extra quest for a different one of the same attribute (or any, if none left). `pool` is gated already (randomPool). */
 export function rerollQuest(
   day: DayLog,
   questId: string,
@@ -614,7 +586,7 @@ export function rerollQuest(
   if (!isSwappable(day, current, customQuests)) return day;
   const legacy = isLegacyDay(day);
   const used = new Set(day.quests.map((q) => q.templateId));
-  const candidates = pool.filter((t) => !used.has(t.id) && !t.fixed && !t.retired && isUnlocked(t, level) && (legacy || !CORE_IDS.has(t.id)));
+  const candidates = pool.filter((t) => !used.has(t.id) && !t.fixed && !t.retired && (legacy || !CORE_IDS.has(t.id)));
   let options = candidates.filter((t) => t.attr === current.attr);
   if (options.length === 0) options = candidates;
   if (options.length === 0) return day;
@@ -760,7 +732,8 @@ export function setAchieved(day: DayLog, questId: string, achieved: number): Day
 /** Today's quests built from the state's settings (pool, daily custom quests, reading, easy variants). */
 export function dayFor(state: GameState, date: string, level: number): DayLog {
   const p = state.profile;
-  return generateDay(date, level, p?.difficulty ?? 2, randomPool(state, level), dailyQuests(state), fixedQuests(p), !!p?.easyVariants);
+  const pool = randomPool(state);
+  return generateDay(date, level, p?.difficulty ?? 2, pool, dailyQuests(state), fixedQuests(p), !!p?.easyVariants, goalSteps(state, pool));
 }
 
 /** A fresh day from the current settings that keeps the swap jokers already used on that date. */
@@ -1103,8 +1076,11 @@ export function normalize(s: GameState): GameState {
     reading: { books: Array.isArray(s.reading?.books) ? s.reading.books.map(normalizeBook) : [] },
   };
   // old saves: what is unlocked now counts as already seen, so no "Neu freigeschaltet" for it
-  const seen = s.seenUnlockLevel;
-  n.seenUnlockLevel = typeof seen === 'number' && Number.isFinite(seen) && seen >= 1 ? seen : levelFromXp(totalXp(n)).level;
+  n.seenUnlocks = Array.isArray(s.seenUnlocks) ? s.seenUnlocks.filter((x) => typeof x === 'string') : unlockedGatedIds(masteryPoints(n.days));
+  if (n.profile && n.profile.trainingGoal !== undefined && !PREREQUISITES[n.profile.trainingGoal]) {
+    const { trainingGoal: _drop, ...rest } = n.profile;
+    n.profile = rest;
+  }
   return n;
 }
 
@@ -1150,4 +1126,59 @@ export function autoCompleteFromHealth(state: GameState, today: string): GameSta
 export function isTrackedQuest(templateId: string, customQuests: QuestTemplate[] = []): boolean {
   const unit = customQuests.find((t) => t.id === templateId)?.unit ?? '';
   return proofFor({ templateId, unit, amount: 0 }, customQuests).kind === 'health';
+}
+
+// ---------- mastery: unlocks and training goal (rules in mastery.ts) ----------
+
+/** How many extras of a day the training goal may fill. */
+export const GOAL_EXTRAS = 2;
+
+/** Mastery points from all saved days. */
+export const stateMastery = (state: Pick<GameState, 'days'>) => masteryPoints(state.days);
+
+/** Gated exercises unlocked since the note was last closed (and possible with the equipment). */
+export function newlyUnlocked(state: GameState): QuestTemplate[] {
+  const points = stateMastery(state);
+  return unlockedGatedIds(points)
+    .filter((id) => !state.seenUnlocks.includes(id))
+    .map((id) => QUEST_POOL.find((t) => t.id === id)!)
+    .filter((t) => !unavailableReason(t, state.profile));
+}
+
+/** The training goal, if it is set and unlocked now ("Ziel erreicht"). */
+export function reachedGoal(state: GameState): QuestTemplate | null {
+  const goal = state.profile?.trainingGoal;
+  if (!goal || !masteryUnlocked(stateMastery(state), goal)) return null;
+  return QUEST_POOL.find((t) => t.id === goal) ?? null;
+}
+
+/** The note was closed: everything unlocked now counts as seen, and a reached goal is cleared. */
+export function acknowledgeUnlocks(state: GameState): GameState {
+  const seenUnlocks = [...new Set([...state.seenUnlocks, ...unlockedGatedIds(stateMastery(state))])];
+  if (!state.profile || !reachedGoal(state)) return { ...state, seenUnlocks };
+  const { trainingGoal: _drop, ...profile } = state.profile;
+  return { ...state, seenUnlocks, profile };
+}
+
+/** Set a locked exercise as training goal, or clear it (null). Unlocked or unknown exercises are ignored. */
+export function setTrainingGoal(state: GameState, id: string | null): GameState {
+  if (!state.profile) return state;
+  if (id === null) {
+    const { trainingGoal: _drop, ...profile } = state.profile;
+    return { ...state, profile };
+  }
+  if (!PREREQUISITES[id] || masteryUnlocked(stateMastery(state), id)) return state;
+  return { ...state, profile: { ...state.profile, trainingGoal: id } };
+}
+
+/**
+ * Exercises the training goal puts into the extras, best first: the deepest unlockable steps of
+ * its unmet prerequisites, without core quests (they come daily) and only from `pool`.
+ */
+export function goalSteps(state: GameState, pool: QuestTemplate[] = randomPool(state)): QuestTemplate[] {
+  const goal = state.profile?.trainingGoal;
+  if (!goal) return [];
+  return trainingSteps(stateMastery(state), goal, isCoreQuest)
+    .map((id) => pool.find((t) => t.id === id))
+    .filter((t): t is QuestTemplate => !!t);
 }

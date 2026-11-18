@@ -11,9 +11,8 @@ import {
   fixedQuests,
   isCoreQuest,
   isGameState,
-  levelFromXp,
-  minLevelOf,
-  totalXp,
+  goalSteps,
+  stateMastery,
   readingOn,
   makeCustomQuest,
   toDateKey,
@@ -22,6 +21,7 @@ import {
   type QuestAttr,
 } from '../game';
 import type { Game } from '../store';
+import { MAX_TIER, isUnlocked, masteryOf, pointsForTier, unmetRequirements, type MasteryPoints, type Requirement } from '../mastery';
 import { SCANNABLE, STRETCH } from '../pose';
 import { proofFor } from '../proof';
 import { hasExerciseAnim } from '../anim/exercises';
@@ -264,6 +264,7 @@ function CustomQuests({ game }: { game: Game }) {
 /** The quests of every day ("Pflicht"): the core quests, plus reading while it is on. */
 function FixedQuests({ game }: { game: Game }) {
   const quests = fixedQuests(game.state.profile);
+  const points = stateMastery(game.state);
   return (
     <div className="field">
       <span>Jeden Tag fest dabei</span>
@@ -279,6 +280,7 @@ function FixedQuests({ game }: { game: Game }) {
               <span>
                 {ATTR_LABEL[q.attr]} · {proofName(proofFor({ templateId: q.id, unit: q.unit, amount: q.base }))}
               </span>
+              {isCoreQuest(q.id) && q.id !== 'steps' && <MasteryLine points={points} id={q.id} />}
             </span>
             <span className="tag">Pflicht</span>
           </li>
@@ -288,27 +290,94 @@ function FixedQuests({ game }: { game: Game }) {
   );
 }
 
+const titleOf = (id: string) => QUEST_POOL.find((t) => t.id === id)?.title ?? id;
+/** Points with at most one decimal, German style (7,5). */
+const fmtPoints = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ','));
+/** "Liegestütze Stufe 2 (7/10)" */
+const requirementText = (points: MasteryPoints, r: Requirement) =>
+  `${titleOf(r.id)} Stufe ${r.tier} (${fmtPoints(Math.min(points[r.id] ?? 0, pointsForTier(r.tier)))}/${pointsForTier(r.tier)})`;
+
+/** "Stufe 1 · 5/10" with a small bar to the next Stufe. */
+function MasteryLine({ points, id }: { points: MasteryPoints; id: string }) {
+  const m = masteryOf(points, id);
+  const label = m.tier === 0 ? 'Noch keine Stufe' : `Stufe ${m.tier}`;
+  const from = pointsForTier(m.tier);
+  const share = m.next === null ? 1 : (m.points - from) / (m.next - from);
+  return (
+    <span className="mastery-line" aria-label={`${label}${m.next === null ? ', höchste Stufe' : `, ${fmtPoints(m.points)} von ${m.next} bis zur nächsten`}`}>
+      <span className={`tier-badge tier-${m.tier}`}>{label}</span>
+      <span className="mastery-bar" aria-hidden="true">
+        <span style={{ width: `${Math.round(share * 100)}%` }} />
+      </span>
+      <span className="mastery-count">{m.next === null ? `Stufe ${MAX_TIER} erreicht` : `${fmtPoints(m.points)}/${m.next}`}</span>
+    </span>
+  );
+}
+
+/** The training goal: what it needs and which exercises the extras bring for it. */
+function GoalBox({ game, points }: { game: Game; points: MasteryPoints }) {
+  const goal = game.state.profile?.trainingGoal;
+  if (!goal) {
+    return (
+      <p className="small-text">
+        Schwere Übungen schaltest du frei, indem du leichtere meisterst: Jede erledigte Quest bringt einen Punkt (leichtere Variante einen
+        halben). Ab 3 Punkten gibt es Stufe 1, ab 10 Stufe 2, ab 25 Stufe 3. Wähle bei einer gesperrten Übung „Als Ziel“, dann bringen
+        die Extras gezielt, was dafür fehlt.
+      </p>
+    );
+  }
+  const steps = goalSteps(game.state).map((t) => t.title);
+  const unmet = unmetRequirements(points, goal);
+  return (
+    <div className="goal-box">
+      <div className="goal-head">
+        <Icon name="star" size={18} />
+        <span>
+          Trainingsziel: <strong>{titleOf(goal)}</strong>
+        </span>
+        <button type="button" className="link-button" onClick={() => game.setTrainingGoal(null)}>
+          Entfernen
+        </button>
+      </div>
+      {unmet.length > 0 ? (
+        <p className="small-text">Braucht: {unmet.map((r) => requirementText(points, r)).join(', ')}.</p>
+      ) : (
+        <p className="small-text">Alles erfüllt. Die Übung ist freigeschaltet.</p>
+      )}
+      <p className="small-text">
+        {steps.length > 0
+          ? `Ab morgen in den Extras: ${steps.join(', ')}.`
+          : 'Was fehlt, sind Pflicht-Quests. Die kommen jeden Tag, bleib einfach dran.'}
+      </p>
+    </div>
+  );
+}
+
 function BuiltInQuests({ game }: { game: Game }) {
   const { state } = game;
   const [guide, setGuide] = useState<string | null>(null);
-  const level = levelFromXp(totalXp(state)).level;
+  const points = stateMastery(state);
+  const goal = state.profile?.trainingGoal;
+  const guideLocked = guide ? !isUnlocked(points, guide) : false;
   return (
     <fieldset className="field">
       <legend>Übungen für die Extras</legend>
       <p className="small-text">
         Aus diesen Übungen kommen jeden Tag {EXTRA_QUESTS_PER_DAY} wechselnde Extra-Quests. Sie sind freiwillig und bringen zusätzliche XP.
         Schalte Übungen aus, die du nicht machen kannst oder willst. Gilt ab morgen. Tippe auf eine Übung, um zu sehen, wie sie geht.
-        Manche Übungen kommen erst ab einem höheren Level dazu.
       </p>
+      <GoalBox game={game} points={points} />
       <ul className="quest-list">
         {QUEST_POOL.filter((q) => !q.retired && !q.fixed && !isCoreQuest(q.id) && q.id !== READ_QUEST).map((q) => {
           const reason = unavailableReason(q, state.profile);
           const proof = proofName(proofFor({ templateId: q.id, unit: q.unit, amount: q.base }));
-          const lockedUntil = minLevelOf(q) > level ? minLevelOf(q) : null;
-          const enabled = !reason && !lockedUntil && !state.disabledQuests.includes(q.id);
+          const unmet = unmetRequirements(points, q.id);
+          const locked = unmet.length > 0;
+          const enabled = !reason && !locked && !state.disabledQuests.includes(q.id);
           const sub = reason ?? ATTR_LABEL[q.attr];
+          const isGoal = goal === q.id;
           return (
-            <li key={q.id} className={`attr-${q.attr} ${enabled ? '' : 'off'} ${lockedUntil ? 'locked' : ''}`}>
+            <li key={q.id} className={`attr-${q.attr} ${enabled || locked ? '' : 'off'} ${locked ? 'locked' : ''} ${isGoal ? 'goal' : ''}`}>
               <AttrTile attr={q.attr} size="sm" />
               {hasExerciseAnim(q.id) ? (
                 <button type="button" className="ql-text ql-guide" onClick={() => setGuide(q.id)} aria-label={`${q.title}: Anleitung ansehen`}>
@@ -318,6 +387,13 @@ function BuiltInQuests({ game }: { game: Game }) {
                   <span>
                     {sub} · {proof}
                   </span>
+                  {locked ? (
+                    <span className="needs">
+                      <Icon name="lock" size={13} /> Braucht: {unmet.map((r) => requirementText(points, r)).join(', ')}
+                    </span>
+                  ) : (
+                    <MasteryLine points={points} id={q.id} />
+                  )}
                 </button>
               ) : (
                 <label className="ql-text switch-label" htmlFor={`q-${q.id}`}>
@@ -325,13 +401,25 @@ function BuiltInQuests({ game }: { game: Game }) {
                   <span>
                     {sub} · {proof}
                   </span>
+                  {locked ? (
+                    <span className="needs">
+                      <Icon name="lock" size={13} /> Braucht: {unmet.map((r) => requirementText(points, r)).join(', ')}
+                    </span>
+                  ) : (
+                    <MasteryLine points={points} id={q.id} />
+                  )}
                 </label>
               )}
-              {lockedUntil ? (
-                <span className="lock-tag" aria-label={`${q.title}: gesperrt bis Level ${lockedUntil}`}>
-                  <Icon name="lock" size={14} />
-                  ab Level {lockedUntil}
-                </span>
+              {locked ? (
+                <button
+                  type="button"
+                  className={`goal-button ${isGoal ? 'on' : ''}`}
+                  aria-pressed={isGoal}
+                  aria-label={isGoal ? `${q.title} ist dein Ziel, tippen zum Entfernen` : `${q.title} als Trainingsziel setzen`}
+                  onClick={() => game.setTrainingGoal(isGoal ? null : q.id)}
+                >
+                  {isGoal ? 'Ziel' : 'Als Ziel'}
+                </button>
               ) : (
               <input
                 id={`q-${q.id}`}
@@ -348,7 +436,32 @@ function BuiltInQuests({ game }: { game: Game }) {
           );
         })}
       </ul>
-      {guide && <ExerciseGuide exerciseId={guide} easy={false} onClose={() => setGuide(null)} />}
+      {guide && (
+        <ExerciseGuide
+          exerciseId={guide}
+          easy={false}
+          onClose={() => setGuide(null)}
+          footer={
+            <div className="guide-mastery">
+              {guideLocked ? (
+                <>
+                  <p className="small-text">
+                    <Icon name="lock" size={13} /> Braucht: {unmetRequirements(points, guide).map((r) => requirementText(points, r)).join(', ')}
+                  </p>
+                  {goal !== guide && (
+                    <button type="button" className="secondary" onClick={() => game.setTrainingGoal(guide)}>
+                      Als Ziel setzen
+                    </button>
+                  )}
+                  {goal === guide && <p className="small-text">Das ist dein Trainingsziel.</p>}
+                </>
+              ) : (
+                <MasteryLine points={points} id={guide} />
+              )}
+            </div>
+          }
+        />
+      )}
     </fieldset>
   );
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureBattles, logDamage, settleBattles, undoDamage, type Battle } from './battle';
 import {
+  acknowledgeUnlocks,
   addDailyQuestToDay,
   applyAusdauerBonus,
   autoCompleteFromHealth,
@@ -15,6 +16,7 @@ import {
   rerollQuest,
   setQuestVariant as setQuestVariantIn,
   setReading as setReadingIn,
+  setTrainingGoal as setTrainingGoalIn,
   startNewSeason,
   toDateKey,
   totalXp,
@@ -217,7 +219,7 @@ export function useGame(today: string) {
       setState((s) => {
         const day = s.days[today];
         if (!day || !s.profile) return s;
-        const next = rerollQuest(day, questId, currentLevel(s), s.profile.difficulty, randomPool(s, currentLevel(s)), easyOn(s), s.customQuests);
+        const next = rerollQuest(day, questId, currentLevel(s), s.profile.difficulty, randomPool(s), easyOn(s), s.customQuests);
         return { ...s, days: { ...s.days, [today]: next } };
       });
     },
@@ -333,8 +335,11 @@ export function useGame(today: string) {
     [today],
   );
 
-  /** The "Neu freigeschaltet" note on Today was seen: remember up to which level. */
-  const markUnlocksSeen = useCallback(() => setState((s) => ({ ...s, seenUnlockLevel: Math.max(s.seenUnlockLevel, currentLevel(s)) })), []);
+  /** The "Neu freigeschaltet" note on Today was closed: remember what was shown, clear a reached goal. */
+  const markUnlocksSeen = useCallback(() => setState((s) => acknowledgeUnlocks(s)), []);
+
+  /** Set (or clear with null) the training goal: a locked exercise whose prerequisites the extras then train. */
+  const setTrainingGoal = useCallback((id: string | null) => setState((s) => setTrainingGoalIn(s, id)), []);
 
   const replaceState = useCallback((next: GameState) => setState(normalize(next)), []);
   const resetAll = useCallback(() => setState(emptyState()), []);
@@ -361,6 +366,7 @@ export function useGame(today: string) {
     logPages,
     undoPages,
     markUnlocksSeen,
+    setTrainingGoal,
     replaceState,
     resetAll,
   };

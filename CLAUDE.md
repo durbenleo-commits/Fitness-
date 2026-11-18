@@ -16,7 +16,10 @@ Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf E
   gezählte Wiederholungen/Zeit oder Daten aus Samsung Health.
 - Erfolge (Bronze/Silber/Gold), Werte mit Klasse (Krieger, Läufer, …) und Vergleich 7 Tage / seit Tag 1.
 - Ausrüstung und Möglichkeiten (Hanteln, Schwimmbad, „keine Sprungübungen“ …) steuern, welche Übungen kommen.
-- Manche Extra-Übungen kommen erst ab einem Spieler-Level (`EXERCISE_MIN_LEVEL` in game.ts, gilt auch für die Arena; Pflicht und eigene Quests nie); Today zeigt einmal „Neu freigeschaltet“.
+- Meisterschaft (`src/mastery.ts`): jede erledigte Quest = 1 Punkt pro Übung (leicht 0,5), Stufe 1/2/3 ab 3/10/25. Schwere
+  Extra-Übungen brauchen Stufen anderer Übungen (`PREREQUISITES`, z. B. Dips: Liegestütze Stufe 2); gilt für Extras, Joker und
+  Arena, nie für Pflicht und eigene Quests. Today zeigt einmal „Neu freigeschaltet“ (`seenUnlocks`). Trainingsziel
+  (`Profile.trainingGoal`, in Settings „Als Ziel“) legt bis zu 2 fehlende Vorstufen in die Extras neuer Tage.
 - Kamera-Zähler (MediaPipe Pose, läuft nur auf dem Handy; die meisten Übungen gehen von der Seite und von vorne, die App sagt, wenn die Ansicht nicht passt) und Samsung Health über Health Connect (Schritte, Läufe,
   Radfahren, Schwimmen, Stockwerke, Krafttraining).
 - **Nachweis-Pflicht:** Jede Quest und jeder Arena-Treffer braucht einen Nachweis (`proof.ts`): Kamera zählt (Wiederholungen,
@@ -60,6 +63,7 @@ Vor jedem Push: `npm test` und `npm run build` müssen grün sein.
 ## Aufbau
 
 ```
+src/mastery.ts       Meisterschaft: Punkte, Stufen, Voraussetzungen, Weg zum Trainingsziel (rein, getestet)
 src/game.ts          Spielregeln: Quests, Level, Serie, Saison, Ausrüstung, Varianten, Spielstand-Migration (normalize)
 src/proof.ts         Welcher Nachweis gilt für welche Quest / Arena-Phase (Kamera, Kamera-Zeit, Samsung Health, Foto)
 src/reading.ts       Bücher, Seiten pro Tag, Lese-Quest (nur über logPages mit Foto)

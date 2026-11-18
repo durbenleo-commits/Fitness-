@@ -9,7 +9,6 @@ import {
   rerollQuest,
   totalXp,
   DAY_CLEAR_BONUS,
-  QUEST_POOL,
   type GameState,
 } from './game';
 
@@ -48,10 +47,8 @@ describe('quest generation', () => {
   });
 
   it('makes quests harder at higher levels', () => {
-    // same exercises on both days: only templates without a level gate
-    const pool = QUEST_POOL.filter((t) => !t.minLevel);
-    const low = generateDay('2026-11-15', 1, 2, pool);
-    const high = generateDay('2026-11-15', 20, 2, pool);
+    const low = generateDay('2026-11-15', 1, 2);
+    const high = generateDay('2026-11-15', 20, 2);
     low.quests.forEach((q, i) => {
       // steps and reading never grow with level
       if (q.templateId === 'steps' || q.templateId === 'read') expect(high.quests[i].amount).toBe(q.amount);
