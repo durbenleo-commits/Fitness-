@@ -93,3 +93,24 @@
   color: var(--signal);
 }
 .xguide-note { color: var(--chalk-dim); font-size: 0.95rem; }
+
+/* Quest row: "Anleitung" next to the Normal/Leichter switch. */
+.quest-tools { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.2rem; padding-left: 0.2rem; }
+.guide-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: none;
+  border: 0;
+  padding: 0.25rem 0.4rem;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--signal);
+  cursor: pointer;
+}
+
+/* Settings exercise list: the name opens the guide. */
+.ql-guide { background: none; border: 0; padding: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.ql-guide strong { display: inline-flex; align-items: center; gap: 0.35rem; }
+.ql-guide strong svg { color: var(--signal); flex: none; }

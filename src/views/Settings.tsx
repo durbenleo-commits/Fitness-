@@ -21,7 +21,9 @@ import {
 import type { Game } from '../store';
 import { SCANNABLE, STRETCH } from '../pose';
 import { proofFor } from '../proof';
+import { hasExerciseAnim } from '../anim/exercises';
 import { AttrTile, Icon } from './Icons';
+import { ExerciseGuide } from './ExerciseGuide';
 import { EquipmentPicker, Segmented, proofName } from './ui';
 
 export function SettingsView({ game }: { game: Game }) {
@@ -285,12 +287,13 @@ function FixedQuests({ game }: { game: Game }) {
 
 function BuiltInQuests({ game }: { game: Game }) {
   const { state } = game;
+  const [guide, setGuide] = useState<string | null>(null);
   return (
     <fieldset className="field">
       <legend>Übungen für die Extras</legend>
       <p className="small-text">
         Aus diesen Übungen kommen jeden Tag {EXTRA_QUESTS_PER_DAY} wechselnde Extra-Quests. Sie sind freiwillig und bringen zusätzliche XP.
-        Schalte Übungen aus, die du nicht machen kannst oder willst. Gilt ab morgen.
+        Schalte Übungen aus, die du nicht machen kannst oder willst. Gilt ab morgen. Tippe auf eine Übung, um zu sehen, wie sie geht.
       </p>
       <ul className="quest-list">
         {QUEST_POOL.filter((q) => !q.retired && !q.fixed && !isCoreQuest(q.id) && q.id !== READ_QUEST).map((q) => {
@@ -300,14 +303,26 @@ function BuiltInQuests({ game }: { game: Game }) {
           return (
             <li key={q.id} className={`attr-${q.attr} ${enabled ? '' : 'off'}`}>
               <AttrTile attr={q.attr} size="sm" />
-              <label className="ql-text switch-label" htmlFor={`q-${q.id}`}>
-                <strong>{q.title}</strong>
-                <span>
-                  {reason ?? ATTR_LABEL[q.attr]} · {proof}
-                </span>
-              </label>
+              {hasExerciseAnim(q.id) ? (
+                <button type="button" className="ql-text ql-guide" onClick={() => setGuide(q.id)} aria-label={`${q.title}: Anleitung ansehen`}>
+                  <strong>
+                    {q.title} <Icon name="play" size={15} />
+                  </strong>
+                  <span>
+                    {reason ?? ATTR_LABEL[q.attr]} · {proof}
+                  </span>
+                </button>
+              ) : (
+                <label className="ql-text switch-label" htmlFor={`q-${q.id}`}>
+                  <strong>{q.title}</strong>
+                  <span>
+                    {reason ?? ATTR_LABEL[q.attr]} · {proof}
+                  </span>
+                </label>
+              )}
               <input
                 id={`q-${q.id}`}
+                aria-label={`${q.title} in den Extras`}
                 type="checkbox"
                 role="switch"
                 className="switch"
@@ -319,6 +334,7 @@ function BuiltInQuests({ game }: { game: Game }) {
           );
         })}
       </ul>
+      {guide && <ExerciseGuide exerciseId={guide} easy={false} onClose={() => setGuide(null)} />}
     </fieldset>
   );
 }

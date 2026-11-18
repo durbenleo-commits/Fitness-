@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { EASY_XP_FACTOR } from '../game';
 import { EXERCISE_ANIMS } from '../anim/exercises';
 import { ExerciseAnim } from './ExerciseAnim';
@@ -12,10 +12,12 @@ export interface ExerciseGuideProps {
   onClose: () => void;
   /** Called when the person switches the variant in the sheet. */
   onEasyChange?: (easy: boolean) => void;
+  /** Extra content under the cues (for example "Diese Version nehmen"). */
+  footer?: ReactNode;
 }
 
 /** Sheet "Anleitung": animation (tap switches normal / easier), short cues and the XP hint. */
-export function ExerciseGuide({ exerciseId, easy, onClose, onEasyChange }: ExerciseGuideProps) {
+export function ExerciseGuide({ exerciseId, easy, onClose, onEasyChange, footer }: ExerciseGuideProps) {
   const def = EXERCISE_ANIMS[exerciseId];
   const [isEasy, setIsEasy] = useState(easy);
   useEffect(() => setIsEasy(easy), [easy]);
@@ -48,6 +50,7 @@ export function ExerciseGuide({ exerciseId, easy, onClose, onEasyChange }: Exerc
           ))}
         </ol>
         {isEasy && <p className="xguide-note">Gleiche Menge wie normal, nur mit weniger Kraft. Dafür gibt es {Math.round(EASY_XP_FACTOR * 100)} % der XP.</p>}
+        {footer}
       </div>
     </Sheet>
   );

@@ -30,7 +30,9 @@ import type { Game } from '../store';
 import { PRESENCE, STRETCH_FOCUS } from '../pose';
 import { healthProgress, proofFor, questMaxTarget, questTarget, scanToAchieved, type HealthMetric, type ProofKind } from '../proof';
 import { pagesReadOn } from '../reading';
+import { hasExerciseAnim } from '../anim/exercises';
 import { AttrTile, Badge3D, Icon } from './Icons';
+import { ExerciseGuide } from './ExerciseGuide';
 import { ReadingSheet } from './Reading';
 import { Scanner } from './Scanner';
 import { Sprite } from './Sprites';
@@ -82,7 +84,8 @@ type Flow =
   | { kind: 'scan'; quest: QuestInstance; scanId: string; target: number; max: number; base: number; perUnit?: number }
   | { kind: 'health'; quest: QuestInstance; metric: HealthMetric }
   | { kind: 'read' }
-  | { kind: 'done'; quest: QuestInstance };
+  | { kind: 'done'; quest: QuestInstance }
+  | { kind: 'guide'; questId: string };
 
 export function TodayView({ game, today, onOpenArena }: { game: Game; today: string; onOpenArena: () => void }) {
   const { state } = game;
@@ -172,6 +175,7 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         note={questNote(state, today, q)}
         canSwitch={!swapping && canSwitchVariant(q, custom)}
         onSwitch={() => game.setQuestVariant(q.id, !q.easy)}
+        onGuide={!swapping && !custom.some((t) => t.id === q.templateId) && hasExerciseAnim(q.templateId) ? () => setFlow({ kind: 'guide', questId: q.id }) : undefined}
         onTap={() => {
           if (!swapping) return startProof(q);
           if (!swappable) return;
@@ -349,6 +353,12 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         />
       )}
 
+      {flow?.kind === 'guide' &&
+        (() => {
+          const q = day.quests.find((x) => x.id === flow.questId);
+          return q ? <QuestGuide quest={q} canSwitch={canSwitchVariant(q, custom)} onApply={(easy) => game.setQuestVariant(q.id, easy)} onClose={close} /> : null;
+        })()}
+
       {enemy && (
         <button className={`arena-teaser attr-${enemy.attr} ${enemy.defeatedOn ? 'won' : ''}`} onClick={onOpenArena}>
           <Sprite enemyId={enemy.enemyId} className="teaser-monster" />
@@ -409,8 +419,10 @@ function QuestRow(props: {
   canSwitch: boolean;
   onSwitch: () => void;
   onTap: () => void;
+  /** Opens the exercise guide; missing when the quest has no animation. */
+  onGuide?: () => void;
 }) {
-  const { quest: q, swapMode, swappable, proof, note, canSwitch, onSwitch, onTap } = props;
+  const { quest: q, swapMode, swappable, proof, note, canSwitch, onSwitch, onTap, onGuide } = props;
   const xp = questXp(q);
   const doubled = isDoubled(q);
   const [burst, setBurst] = useState<{ key: number; xp: number } | null>(null);
@@ -464,17 +476,60 @@ function QuestRow(props: {
           </span>
         )}
       </button>
-      {canSwitch && (
-        <button
-          className="link-button"
-          style={{ fontSize: '0.8rem', padding: '0.25rem 0.4rem', marginTop: '0.2rem' }}
-          onClick={onSwitch}
-          aria-label={q.easy ? `${q.title}: normale Ausführung, volle XP` : `${q.title}: leichtere Ausführung, weniger XP`}
-        >
-          {q.easy ? 'Normal' : 'Leichter'}
-        </button>
+      {(canSwitch || onGuide) && (
+        <div className="quest-tools">
+          {onGuide && (
+            <button type="button" className="guide-link" onClick={onGuide} aria-label={`${q.title}: Anleitung mit Animation`}>
+              <Icon name="play" size={16} />
+              Anleitung
+            </button>
+          )}
+          {canSwitch && (
+            <button
+              className="link-button"
+              style={{ fontSize: '0.8rem', padding: '0.25rem 0.4rem' }}
+              onClick={onSwitch}
+              aria-label={q.easy ? `${q.title}: normale Ausführung, volle XP` : `${q.title}: leichtere Ausführung, weniger XP`}
+            >
+              {q.easy ? 'Normal' : 'Leichter'}
+            </button>
+          )}
+        </div>
       )}
     </li>
+  );
+}
+
+/**
+ * "Anleitung" for one quest: starts on the quest's current variant. Switching inside is a preview; while the
+ * quest is open and switchable, "Diese Version nehmen" applies the shown variant to the quest.
+ */
+function QuestGuide({ quest: q, canSwitch, onApply, onClose }: { quest: QuestInstance; canSwitch: boolean; onApply: (easy: boolean) => void; onClose: () => void }) {
+  const [shown, setShown] = useState(!!q.easy);
+  const differs = shown !== !!q.easy;
+  return (
+    <ExerciseGuide
+      exerciseId={q.templateId}
+      easy={!!q.easy}
+      onEasyChange={setShown}
+      onClose={onClose}
+      footer={
+        differs &&
+        (canSwitch ? (
+          <button
+            className="primary"
+            onClick={() => {
+              onApply(shown);
+              onClose();
+            }}
+          >
+            Diese Version nehmen
+          </button>
+        ) : (
+          <p className="xguide-note">Nur Vorschau: Deine Quest bleibt {q.easy ? 'leichter' : 'normal'}{q.done ? ', weil sie schon erledigt ist' : ''}.</p>
+        ))
+      }
+    />
   );
 }
 
