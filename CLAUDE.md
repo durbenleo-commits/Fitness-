@@ -19,7 +19,7 @@ Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf E
 - Schwere Extra-Übungen sind gesperrt, bis beides erfüllt ist: Spieler-Level (`EXERCISE_MIN_LEVEL` in game.ts) und
   Meisterschaft (`src/mastery.ts`: jede erledigte Quest = 1 Punkt pro Übung, leicht 0,5; Stufe 1/2/3 ab 3/10/25;
   `PREREQUISITES`, z. B. Dips: Liegestütze Stufe 2). Gilt für Extras, Joker und Arena, nie für Pflicht und eigene Quests.
-  Today zeigt einmal „Neu freigeschaltet“ (`seenUnlocks`). Trainingsziel (`Profile.trainingGoal`, Settings „Als Ziel“) legt
+  Today zeigt einmal „Neu freigeschaltet“ (`seenUnlocks`). Trainingsziel (`Profile.trainingGoal`, Meisterschaft „Als Ziel“) legt
   bis zu 2 fehlende Vorstufen in die Extras neuer Tage.
 - Kamera-Zähler (MediaPipe Pose, läuft nur auf dem Handy; die meisten Übungen gehen von der Seite und von vorne, die App sagt, wenn die Ansicht nicht passt) und Samsung Health über Health Connect (Schritte, Läufe,
   Radfahren, Schwimmen, Stockwerke, Krafttraining).
@@ -74,6 +74,12 @@ src/achievements.ts  Erfolge
 src/store.ts         React-State, Speichern, Health-Connect-Abgleich
 src/health.ts        Brücke zu Health Connect (nur Android)
 src/views/           Bildschirme: Today, Arena, Stats, Achievements, Settings, Scanner, Reading, Onboarding, ui
+src/App.tsx          Tabs Heute / Arena / Menü. Menü (views/Hub.tsx) öffnet Unterseiten per history.pushState
+                     (Zurück-Knopf oben, Browser-Zurück und Android-Zurück über @capacitor/app führen zurück zum Menü)
+src/views/Hub.tsx    Menü: gruppierte Zeilen mit Kurzinfo (Meisterschaft, Erfolge, Werte, Quests & Übungen, Lesen, Einstellungen)
+src/views/Mastery.tsx  Meisterschaft: Trainingsziel, Wege (SKILL_PATHS in mastery.ts) Stufe für Stufe, „Als Ziel“
+src/views/Exercises.tsx  Quests & Übungen: Pflicht-Liste, Extras an/aus (mit Anleitung), eigene Quests
+src/views/NavBar.tsx   Leiste einer Unterseite: Zurück + kleiner Titel beim Scrollen
 src/views/Reading.tsx  Lese-Sheet: Buch anlegen (mit Cover-Foto und Seitenzahl), „Buch bearbeiten“, Seite + Foto eintragen, Buch beenden
 src/views/Icons.tsx  Linien-Icons und 3D-Abzeichen
 src/views/Sprites.tsx  die 14 Monster als SVG

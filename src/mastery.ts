@@ -127,3 +127,14 @@ export function trainingSteps(
   // stable sort: deepest first, otherwise the order of the table
   return found.map((f, i) => ({ ...f, i })).sort((a, b) => b.depth - a.depth || a.i - b.i).map((f) => f.id);
 }
+
+/**
+ * The skill paths shown on the Meisterschaft screen: exercises grouped by movement, easiest
+ * first, so the steps towards the hard ones read top to bottom. Display only, no rules.
+ */
+export const SKILL_PATHS: { id: string; title: string; line: string; ids: string[] }[] = [
+  { id: 'push', title: 'Drücken', line: 'Von Liegestützen bis zum Handstand', ids: ['pushups', 'dips', 'diamond', 'pike', 'handstand'] },
+  { id: 'legs', title: 'Beine', line: 'Von Kniebeugen bis zur Pistol Squat', ids: ['squats', 'jumpsquats', 'lunges', 'splitsquat', 'pistol'] },
+  { id: 'core', title: 'Rumpf', line: 'Vom Unterarmstütz bis zum L-Sitz', ids: ['plank', 'sideplank', 'legraises', 'hollow', 'lsit'] },
+  { id: 'pull', title: 'Ziehen', line: 'An der Klimmzugstange', ids: ['pullups', 'chinups', 'kneeraises'] },
+];

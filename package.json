@@ -19,6 +19,7 @@
   "homepage": "https://github.com/durbenleo-commits/fitness-#readme",
   "dependencies": {
     "@capacitor/android": "^8.6.2",
+    "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.6.2",
     "@capgo/capacitor-health": "^8.13.0",
     "@fontsource/barlow-semi-condensed": "^5.3.0",

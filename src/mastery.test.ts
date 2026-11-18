@@ -28,6 +28,7 @@ import {
   ALL_MASTERED,
   GATED_IDS,
   PREREQUISITES,
+  SKILL_PATHS,
   isUnlocked,
   masteryOf,
   masteryPoints,
@@ -297,5 +298,20 @@ describe('level gate and mastery together', () => {
     const withPush = { ...early, days: history({ pushups: 10, legraises: 10 }) };
     const lvl = stateLevel(withPush);
     expect(goalSteps(withPush).map((t) => t.id)).toEqual([...(lvl >= 5 ? ['hollow'] : []), ...(lvl >= 3 ? ['dips'] : [])]);
+  });
+});
+
+describe('skill paths', () => {
+  it('show every gated exercise and every prerequisite exactly once', () => {
+    const shown = SKILL_PATHS.flatMap((p) => p.ids);
+    expect(new Set(shown).size).toBe(shown.length);
+    const needed = [...GATED_IDS, ...Object.values(PREREQUISITES).flatMap((rs) => rs.map((r) => r.id))];
+    for (const id of needed) expect(shown).toContain(id);
+  });
+  it('list prerequisites from the same path before the exercise', () => {
+    for (const p of SKILL_PATHS)
+      p.ids.forEach((id, i) => {
+        for (const r of PREREQUISITES[id] ?? []) if (p.ids.includes(r.id)) expect(p.ids.indexOf(r.id)).toBeLessThan(i);
+      });
   });
 });

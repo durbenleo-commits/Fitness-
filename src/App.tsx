@@ -2,32 +2,79 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { achievementStatus, type Achievement } from './achievements';
 import { currentStreak, levelFromXp, totalXp } from './game';
 import { useGame, useToday } from './store';
+import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { AchievementsView } from './views/Achievements';
 import { ArenaView } from './views/Arena';
 import { Onboarding } from './views/Onboarding';
 import { SettingsView } from './views/Settings';
-import { StatsView } from './views/Stats';
+import { Books, StatsView } from './views/Stats';
+import { ExercisesView } from './views/Exercises';
+import { HubView, SCREEN_TITLE, type Screen } from './views/Hub';
+import { MasteryView } from './views/Mastery';
+import { NavBar } from './views/NavBar';
 import { Icon } from './views/Icons';
 import { Hud, TodayView } from './views/Today';
 import { UpdatePrompt } from './views/UpdatePrompt';
 import { LevelUp, Toast, Victory } from './views/ui';
 import type { Battle } from './battle';
 
-type Tab = 'heute' | 'arena' | 'werte' | 'erfolge' | 'einstellungen';
+type Tab = 'heute' | 'arena' | 'menu';
 
-const TABS: { id: Tab; label: string; icon: 'today' | 'arena' | 'stats' | 'medal' | 'sliders' }[] = [
+const TABS: { id: Tab; label: string; icon: 'today' | 'arena' | 'menu' }[] = [
   { id: 'heute', label: 'Heute', icon: 'today' },
   { id: 'arena', label: 'Arena', icon: 'arena' },
-  { id: 'werte', label: 'Werte', icon: 'stats' },
-  { id: 'erfolge', label: 'Erfolge', icon: 'medal' },
-  { id: 'einstellungen', label: 'Optionen', icon: 'sliders' },
+  { id: 'menu', label: 'Menü', icon: 'menu' },
 ];
+
+/** The sub-screen stored in a history entry (pushed when a menu row opens a screen). */
+const screenOf = (st: unknown): Screen | null => {
+  const v = (st as { qfScreen?: unknown } | null)?.qfScreen;
+  return typeof v === 'string' && v in SCREEN_TITLE ? (v as Screen) : null;
+};
 
 export default function App() {
   const today = useToday();
   const game = useGame(today);
   const { state } = game;
   const [tab, setTab] = useState<Tab>('heute');
+  // Screens opened from the menu live in the browser history, so the Android back button
+  // and the browser's back go back to the menu.
+  const [screen, setScreen] = useState<Screen | null>(null);
+  const [motion, setMotion] = useState<'push' | 'pop' | 'none'>('none');
+  const menuScroll = useRef(0);
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  useEffect(() => {
+    if (screenOf(window.history.state)) window.history.replaceState(null, ''); // a reload starts on Heute
+    const onPop = (e: PopStateEvent) => {
+      const next = screenOf(e.state);
+      setScreen(next);
+      setMotion('pop');
+      if (next === null && tabRef.current === 'menu') requestAnimationFrame(() => window.scrollTo(0, menuScroll.current));
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const sub = CapApp.addListener('backButton', ({ canGoBack }) => {
+      if (canGoBack) window.history.back();
+      else CapApp.exitApp();
+    });
+    return () => {
+      sub.then((h) => h.remove());
+    };
+  }, []);
+  const openScreen = useCallback((s: Screen) => {
+    menuScroll.current = window.scrollY;
+    window.history.pushState({ qfScreen: s }, '');
+    setScreen(s);
+    setMotion('push');
+    setTab('menu');
+    window.scrollTo(0, 0);
+  }, []);
+  const back = useCallback(() => window.history.back(), []);
 
   const xp = totalXp(state);
   const lvl = levelFromXp(xp);
@@ -59,6 +106,8 @@ export default function App() {
     if (fresh) setVictory(fresh);
   }, [state.battles]);
 
+  const sub = tab === 'menu' ? screen : null;
+
   if (!state.profile) return (
     <>
       <Onboarding onStart={game.startGame} />
@@ -68,16 +117,20 @@ export default function App() {
 
   return (
     <div className="app">
-      <Hud
-        profile={state.profile}
-        level={lvl.level}
-        intoLevel={lvl.intoLevel}
-        needed={lvl.needed}
-        streak={currentStreak(state, today)}
-        today={today}
-      />
+      {sub ? (
+        <NavBar title={SCREEN_TITLE[sub]} backLabel="Menü" onBack={back} />
+      ) : (
+        <Hud
+          profile={state.profile}
+          level={lvl.level}
+          intoLevel={lvl.intoLevel}
+          needed={lvl.needed}
+          streak={currentStreak(state, today)}
+          today={today}
+        />
+      )}
 
-      <main className="content">
+      <main className={`content ${sub ? 'sub' : ''}`}>
         {tab === 'heute' && (
           <TodayView
             game={game}
@@ -89,9 +142,33 @@ export default function App() {
           />
         )}
         {tab === 'arena' && <ArenaView game={game} today={today} />}
-        {tab === 'werte' && <StatsView game={game} today={today} xp={xp} />}
-        {tab === 'erfolge' && <AchievementsView list={achievements} />}
-        {tab === 'einstellungen' && <SettingsView game={game} />}
+        {tab === 'menu' && (
+          <div key={sub ?? 'menu'} className={`screen motion-${motion}`}>
+            {sub === null && <HubView game={game} xp={xp} achievements={achievements} onOpen={openScreen} />}
+            {sub !== null && (
+              <div className="large-title-row">
+                <h1 className="large-title" id="screen-title">
+                  {SCREEN_TITLE[sub]}
+                </h1>
+                {sub === 'erfolge' && (
+                  <span className="count">
+                    {achievements.filter((a) => a.unlocked).length} von {achievements.length}
+                  </span>
+                )}
+              </div>
+            )}
+            {sub === 'meisterschaft' && <MasteryView game={game} />}
+            {sub === 'erfolge' && <AchievementsView list={achievements} />}
+            {sub === 'werte' && <StatsView game={game} today={today} xp={xp} />}
+            {sub === 'uebungen' && <ExercisesView game={game} onOpenMastery={() => openScreen('meisterschaft')} />}
+            {sub === 'lesen' && (
+              <div className="reading-screen">
+                <Books game={game} today={today} />
+              </div>
+            )}
+            {sub === 'einstellungen' && <SettingsView game={game} />}
+          </div>
+        )}
       </main>
 
       <nav className="tabs" aria-label="Bereiche">
@@ -101,6 +178,12 @@ export default function App() {
             className={tab === t.id ? 'active' : ''}
             aria-current={tab === t.id ? 'page' : undefined}
             onClick={() => {
+              // leaving an open screen (or tapping Menü on it) goes back to the menu first
+              if (screen) {
+                window.history.back();
+                if (t.id === 'menu') return;
+              }
+              setMotion('none');
               setTab(t.id);
               window.scrollTo(0, 0);
             }}

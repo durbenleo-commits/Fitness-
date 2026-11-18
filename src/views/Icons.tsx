@@ -27,6 +27,25 @@ const P: Record<string, JSX.Element> = {
       <circle cx="18" cy="18" r="2" />
     </>
   ),
+  menu: (
+    <>
+      <rect x="4" y="4" width="6.5" height="6.5" rx="2" />
+      <rect x="13.5" y="4" width="6.5" height="6.5" rx="2" />
+      <rect x="4" y="13.5" width="6.5" height="6.5" rx="2" />
+      <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2" />
+    </>
+  ),
+  chevronRight: <path d="M9.5 5.5L16 12l-6.5 6.5" />,
+  chevronLeft: <path d="M14.5 5.5L8 12l6.5 6.5" />,
+  // a path of three steps, rising: mastery
+  path: (
+    <>
+      <circle cx="5.5" cy="18.5" r="2.5" />
+      <circle cx="12" cy="12" r="2.5" />
+      <circle cx="18.5" cy="5.5" r="2.5" />
+      <path d="M7.3 16.7l2.9-2.9M13.8 10.2l2.9-2.9" />
+    </>
+  ),
   // attributes
   staerke: <path d="M3 10v4M6 7v10M6 12h12M18 7v10M21 10v4" />,
   ausdauer: <path d="M2 12h4l3-7 5 14 3-7h5" />,

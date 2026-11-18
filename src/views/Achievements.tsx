@@ -2,7 +2,6 @@ import type { AchievementStatus } from '../achievements';
 import { Badge3D } from './Icons';
 
 export function AchievementsView({ list }: { list: AchievementStatus[] }) {
-  const unlocked = list.filter((a) => a.unlocked).length;
   const tiers = (['gold', 'silver', 'bronze'] as const).map((t) => ({
     tier: t,
     got: list.filter((a) => a.unlocked && a.achievement.tier === t).length,
@@ -12,13 +11,6 @@ export function AchievementsView({ list }: { list: AchievementStatus[] }) {
 
   return (
     <section>
-      <div className="section-head">
-        <h1>Erfolge</h1>
-        <span className="count">
-          {unlocked} von {list.length}
-        </span>
-      </div>
-
       <div className="tier-summary">
         {tiers.map((t) => (
           <div key={t.tier} className="tier-pill">

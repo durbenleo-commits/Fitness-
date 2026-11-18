@@ -288,7 +288,7 @@ function Move(props: {
             {health === 'connected'
               ? `: ${fmt(progress)} von ${fmt(p.target)} ${p.unit}.`
               : health === 'off'
-                ? '. Verbinde es unter Optionen.'
+                ? '. Verbinde es unter Menü → Einstellungen.'
                 : '. Das geht nur in der Android-App.'}
           </span>
         </p>
