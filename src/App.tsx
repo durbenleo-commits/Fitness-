@@ -28,6 +28,10 @@ const TABS: { id: Tab; label: string; icon: 'today' | 'arena' | 'menu' }[] = [
 ];
 
 /** The sub-screen stored in a history entry (pushed when a menu row opens a screen). */
+const depthOf = (st: unknown): number => {
+  const v = (st as { qfDepth?: unknown } | null)?.qfDepth;
+  return typeof v === 'number' && v >= 1 ? v : 0;
+};
 const screenOf = (st: unknown): Screen | null => {
   const v = (st as { qfScreen?: unknown } | null)?.qfScreen;
   return typeof v === 'string' && v in SCREEN_TITLE ? (v as Screen) : null;
@@ -43,12 +47,14 @@ export default function App() {
   const [screen, setScreen] = useState<Screen | null>(null);
   const [motion, setMotion] = useState<'push' | 'pop' | 'none'>('none');
   const menuScroll = useRef(0);
+  const depthRef = useRef(0); // history entries pushed on top of the menu (menu -> Übungen -> Meisterschaft = 2)
   const tabRef = useRef(tab);
   tabRef.current = tab;
   useEffect(() => {
     if (screenOf(window.history.state)) window.history.replaceState(null, ''); // a reload starts on Heute
     const onPop = (e: PopStateEvent) => {
       const next = screenOf(e.state);
+      depthRef.current = next ? depthOf(e.state) : 0;
       setScreen(next);
       setMotion('pop');
       if (next === null && tabRef.current === 'menu') requestAnimationFrame(() => window.scrollTo(0, menuScroll.current));
@@ -67,8 +73,9 @@ export default function App() {
     };
   }, []);
   const openScreen = useCallback((s: Screen) => {
-    menuScroll.current = window.scrollY;
-    window.history.pushState({ qfScreen: s }, '');
+    if (depthRef.current === 0) menuScroll.current = window.scrollY;
+    depthRef.current += 1;
+    window.history.pushState({ qfScreen: s, qfDepth: depthRef.current }, '');
     setScreen(s);
     setMotion('push');
     setTab('menu');
@@ -179,10 +186,7 @@ export default function App() {
             aria-current={tab === t.id ? 'page' : undefined}
             onClick={() => {
               // leaving an open screen (or tapping Menü on it) goes back to the menu first
-              if (screen) {
-                window.history.back();
-                if (t.id === 'menu') return;
-              }
+              if (depthRef.current > 0) window.history.go(-depthRef.current); // pops every opened screen at once
               setMotion('none');
               setTab(t.id);
               window.scrollTo(0, 0);
