@@ -83,7 +83,7 @@ describe('calisthenics exercises', () => {
   });
 
   it('follow the equipment and jump settings', () => {
-    const ids = (p: Profile) => randomPool({ customQuests: [], disabledQuests: [], profile: p }).map((t) => t.id);
+    const ids = (p: Profile) => randomPool({ customQuests: [], disabledQuests: [], profile: p }, 99).map((t) => t.id);
     const plain = ids({ ...profile, equipment: [] });
     expect(plain).toContain('dips');
     expect(plain).toContain('jumpsquats');
@@ -95,7 +95,7 @@ describe('calisthenics exercises', () => {
   });
 
   it('can be switched off', () => {
-    const pool = randomPool({ customQuests: [], disabledQuests: ['dips', 'pistol'], profile });
+    const pool = randomPool({ customQuests: [], disabledQuests: ['dips', 'pistol'], profile }, 99);
     expect(pool.map((t) => t.id)).not.toContain('dips');
     expect(pool.map((t) => t.id)).not.toContain('pistol');
   });
@@ -128,7 +128,7 @@ describe('calisthenics exercises', () => {
   });
 
   it('are in the arena pool unless they need missing gear', () => {
-    const ids = battlePool({ ...emptyState(), profile: { ...profile, equipment: [] } }).map((t) => t.id);
+    const ids = battlePool({ ...emptyState(), profile: { ...profile, equipment: [] } }, 99).map((t) => t.id);
     expect(ids).toContain('handstand');
     expect(ids).not.toContain('chinups');
     const s = ensureBattles({ ...emptyState(), profile }, TODAY, 1);
@@ -186,7 +186,7 @@ describe('easy variants give less XP', () => {
 });
 
 describe('switching one quest between normal and easy', () => {
-  const day = (): DayLog => generateDay(TODAY, 1, 2, QUEST_POOL.filter((t) => t.fixed || t.id === 'dips'));
+  const day = (): DayLog => generateDay(TODAY, 2, 2, QUEST_POOL.filter((t) => t.fixed || t.id === 'dips')) // dips from level 2;
   const find = (d: DayLog, id: string) => d.quests.find((q) => q.templateId === id)!;
 
   it('switches an open quest to easy and back', () => {

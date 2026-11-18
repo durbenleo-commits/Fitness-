@@ -41,6 +41,7 @@ export interface QuestTemplate {
   jump?: boolean; // involves jumping (left out with "no jumping")
   fixed?: boolean; // appears every day
   retired?: boolean; // no longer handed out
+  minLevel?: number; // drawn as an extra / in the arena only from this player level on; missing = 1 (see EXERCISE_MIN_LEVEL)
 }
 
 export type Equipment =
@@ -88,7 +89,7 @@ export function unavailableReason(t: QuestTemplate, profile: Profile | null | un
   return null;
 }
 
-export const QUEST_POOL: QuestTemplate[] = [
+const BASE_POOL: QuestTemplate[] = [
   { id: 'pushups', title: 'Liegestütze', icon: '💪', attr: 'staerke', base: 12, step: 1, unit: 'Wdh.', xp: 30 },
   { id: 'squats', title: 'Kniebeugen', icon: '🦵', attr: 'staerke', base: 20, step: 1, unit: 'Wdh.', xp: 30 },
   { id: 'lunges', title: 'Ausfallschritte', icon: '🚶', attr: 'staerke', base: 10, step: 1, unit: 'pro Bein', xp: 30 },
@@ -138,6 +139,45 @@ export const QUEST_POOL: QuestTemplate[] = [
   // Fixed like the step goal, but only while reading is switched on (Profile.reading). Proven by logging pages with a photo.
   { id: 'read', title: 'Lesen', icon: '📖', attr: 'intelligenz', base: 10, step: 1, unit: 'Seiten', xp: 30, noLevelScale: true, fixed: true },
 ];
+
+/**
+ * Player level from which an exercise may come up as a rotating extra or in the arena.
+ * Not listed = level 1. Core quests and custom quests are never gated; saved days keep what they hold.
+ */
+export const EXERCISE_MIN_LEVEL: Record<string, number> = {
+  calves: 1,
+  bridge: 1,
+  superman: 1,
+  legraises: 1,
+  sideplank: 2,
+  dips: 2,
+  hollow: 3,
+  diamond: 3,
+  jumpsquats: 3,
+  pike: 5,
+  splitsquat: 5,
+  chinups: 5,
+  kneeraises: 6,
+  lsit: 8,
+  pistol: 10,
+  handstand: 12,
+};
+
+export const QUEST_POOL: QuestTemplate[] = BASE_POOL.map((t) =>
+  (EXERCISE_MIN_LEVEL[t.id] ?? 1) > 1 && !['steps', 'pushups', 'squats', 'plank'].includes(t.id) ? { ...t, minLevel: EXERCISE_MIN_LEVEL[t.id] } : t,
+);
+
+/** Level from which a template may be drawn (1 if not gated). */
+export const minLevelOf = (t: Pick<QuestTemplate, 'minLevel'>) => t.minLevel ?? 1;
+/** Whether the player's level allows this template as an extra / arena exercise. */
+export const isUnlocked = (t: Pick<QuestTemplate, 'minLevel'>, level: number) => minLevelOf(t) <= level;
+
+/** Built-in extra exercises unlocked by going from level `from` to level `to` (from < minLevel <= to). */
+export function newlyUnlocked(from: number, to: number, profile?: Profile | null): QuestTemplate[] {
+  return QUEST_POOL.filter(
+    (t) => !t.fixed && !t.retired && minLevelOf(t) > from && minLevelOf(t) <= to && !unavailableReason(t, profile),
+  );
+}
 
 /** Template id of the daily reading quest. */
 export const READ_QUEST = 'read';
@@ -272,6 +312,7 @@ export interface GameState {
   battles: Battle[];
   health: HealthState;
   reading: ReadingState;
+  seenUnlockLevel: number; // level up to which "Neu freigeschaltet" was shown; missing in old saves = current level
 }
 
 /** Reading log: books with their page entries (see reading.ts). */
@@ -302,6 +343,7 @@ export const emptyState = (): GameState => ({
   battles: [],
   health: { connected: false, days: {} },
   reading: { books: [] },
+  seenUnlockLevel: 1,
 });
 
 // ---------- dates ----------
@@ -365,17 +407,21 @@ export function rankFor(level: number): string {
 
 // ---------- quest pool ----------
 
-/** Templates that may be drawn at random: enabled built-ins plus non-daily custom quests. */
+/**
+ * Templates that may be drawn at random: enabled built-ins unlocked at `level`, plus non-daily
+ * custom quests (never gated). If everything is switched off, all possible unlocked built-ins.
+ */
 export function randomPool(
   state: Pick<GameState, 'customQuests' | 'disabledQuests'> & { profile?: Profile | null },
+  level: number,
 ): QuestTemplate[] {
-  const possible = QUEST_POOL.filter((q) => !q.fixed && !q.retired && !unavailableReason(q, state.profile));
+  const possible = QUEST_POOL.filter((q) => !q.fixed && !q.retired && isUnlocked(q, level) && !unavailableReason(q, state.profile));
   const pool = [...possible.filter((q) => !state.disabledQuests.includes(q.id)), ...state.customQuests.filter((q) => !q.daily)];
   return pool.length > 0 ? pool : possible;
 }
 
-/** Built-in exercises that are possible and switched on: what enemies may ask for. */
-export const battlePool = (state: GameState) => randomPool(state).filter((q) => !q.custom);
+/** Built-in exercises that are possible, unlocked and switched on: what enemies may ask for. */
+export const battlePool = (state: GameState, level: number) => randomPool(state, level).filter((q) => !q.custom);
 
 export const dailyQuests = (state: Pick<GameState, 'customQuests'>) => state.customQuests.filter((q) => q.daily);
 
@@ -504,7 +550,7 @@ export function generateDay(
   const rand = mulberry32(hash(date));
   const pick = (list: QuestTemplate[]) => list[Math.floor(rand() * list.length)];
   const fixedIds = new Set(fixed.map((t) => t.id));
-  const random = pool.filter((q) => extraCandidate(q) && !fixedIds.has(q.id));
+  const random = pool.filter((q) => extraCandidate(q) && isUnlocked(q, level) && !fixedIds.has(q.id));
   const extras: QuestTemplate[] = [];
   for (const attr of QUEST_ATTRS) {
     const options = random.filter((q) => q.attr === attr && !extras.includes(q));
@@ -568,7 +614,7 @@ export function rerollQuest(
   if (!isSwappable(day, current, customQuests)) return day;
   const legacy = isLegacyDay(day);
   const used = new Set(day.quests.map((q) => q.templateId));
-  const candidates = pool.filter((t) => !used.has(t.id) && !t.fixed && !t.retired && (legacy || !CORE_IDS.has(t.id)));
+  const candidates = pool.filter((t) => !used.has(t.id) && !t.fixed && !t.retired && isUnlocked(t, level) && (legacy || !CORE_IDS.has(t.id)));
   let options = candidates.filter((t) => t.attr === current.attr);
   if (options.length === 0) options = candidates;
   if (options.length === 0) return day;
@@ -714,7 +760,7 @@ export function setAchieved(day: DayLog, questId: string, achieved: number): Day
 /** Today's quests built from the state's settings (pool, daily custom quests, reading, easy variants). */
 export function dayFor(state: GameState, date: string, level: number): DayLog {
   const p = state.profile;
-  return generateDay(date, level, p?.difficulty ?? 2, randomPool(state), dailyQuests(state), fixedQuests(p), !!p?.easyVariants);
+  return generateDay(date, level, p?.difficulty ?? 2, randomPool(state, level), dailyQuests(state), fixedQuests(p), !!p?.easyVariants);
 }
 
 /** A fresh day from the current settings that keeps the swap jokers already used on that date. */
@@ -1038,7 +1084,7 @@ function normalizeHealthDay(h: Partial<HealthDay> | undefined): HealthDay {
 
 /** Fill in fields added after the first release so old saves keep working. */
 export function normalize(s: GameState): GameState {
-  return {
+  const n: GameState = {
     ...emptyState(),
     ...s,
     customQuests: Array.isArray(s.customQuests) ? s.customQuests : [],
@@ -1056,6 +1102,10 @@ export function normalize(s: GameState): GameState {
         : { connected: false, days: {} },
     reading: { books: Array.isArray(s.reading?.books) ? s.reading.books.map(normalizeBook) : [] },
   };
+  // old saves: what is unlocked now counts as already seen, so no "Neu freigeschaltet" for it
+  const seen = s.seenUnlockLevel;
+  n.seenUnlockLevel = typeof seen === 'number' && Number.isFinite(seen) && seen >= 1 ? seen : levelFromXp(totalXp(n)).level;
+  return n;
 }
 
 /** Books from older versions may miss newer fields. */

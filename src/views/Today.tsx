@@ -11,6 +11,9 @@ import {
   isCleared,
   isDoubled,
   isLegacyDay,
+  levelFromXp,
+  newlyUnlocked,
+  totalXp,
   isSwappable,
   maxAchieved,
   questAchieved,
@@ -120,6 +123,9 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
   const enemy = currentEnemy(state.battles, today);
   const dayNo = Math.min(seasonDay(state.profile, today), state.profile.seasonDays);
   const wins = state.battles.filter((b) => b.defeatedOn).length;
+  // exercises a level-up unlocked since the player last closed the note
+  const level = levelFromXp(totalXp(state)).level;
+  const unlocked = state.seenUnlockLevel < level ? newlyUnlocked(state.seenUnlockLevel, level, state.profile) : [];
   const visible = (q: QuestInstance) => (filter === 'open' ? !q.done || justDone.includes(q.id) : q.done);
   const mood =
     done === 0 && extrasDone === 0
@@ -221,6 +227,18 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         </h1>
         <p className="day-mood">{mood}</p>
       </div>
+
+      {unlocked.length > 0 && (
+        <div className="unlock-note" role="status">
+          <Icon name="star" size={18} />
+          <span>
+            <strong>Neu freigeschaltet:</strong> {unlocked.map((t) => t.title).join(', ')}. Kann ab morgen in den Extras kommen.
+          </span>
+          <button className="link-button" onClick={game.markUnlocksSeen}>
+            OK
+          </button>
+        </div>
+      )}
 
       <div className="filter-tabs" role="tablist" aria-label="Quests filtern">
         <button role="tab" aria-selected={filter === 'open'} onClick={() => setFilter('open')}>

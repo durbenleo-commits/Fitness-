@@ -217,7 +217,7 @@ export function useGame(today: string) {
       setState((s) => {
         const day = s.days[today];
         if (!day || !s.profile) return s;
-        const next = rerollQuest(day, questId, currentLevel(s), s.profile.difficulty, randomPool(s), easyOn(s), s.customQuests);
+        const next = rerollQuest(day, questId, currentLevel(s), s.profile.difficulty, randomPool(s, currentLevel(s)), easyOn(s), s.customQuests);
         return { ...s, days: { ...s.days, [today]: next } };
       });
     },
@@ -333,6 +333,9 @@ export function useGame(today: string) {
     [today],
   );
 
+  /** The "Neu freigeschaltet" note on Today was seen: remember up to which level. */
+  const markUnlocksSeen = useCallback(() => setState((s) => ({ ...s, seenUnlockLevel: Math.max(s.seenUnlockLevel, currentLevel(s)) })), []);
+
   const replaceState = useCallback((next: GameState) => setState(normalize(next)), []);
   const resetAll = useCallback(() => setState(emptyState()), []);
 
@@ -357,6 +360,7 @@ export function useGame(today: string) {
     updateBook,
     logPages,
     undoPages,
+    markUnlocksSeen,
     replaceState,
     resetAll,
   };

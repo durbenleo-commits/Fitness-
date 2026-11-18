@@ -36,14 +36,14 @@ describe('custom and disabled quests', () => {
 
   it('keeps daily quests out of the random pool and leaves out disabled ones', () => {
     const state = { customQuests: [custom(true), custom(false)], disabledQuests: ['run', 'pushups'] };
-    const pool = randomPool(state);
+    const pool = randomPool(state, 99);
     expect(pool.some((q) => q.id === 'run' || q.id === 'pushups')).toBe(false);
     expect(pool.filter((q) => q.custom)).toHaveLength(1);
   });
 
   it('still fills a day when whole attributes are disabled', () => {
     const disabled = QUEST_POOL.filter((q) => q.attr === 'beweglichkeit').map((q) => q.id);
-    const pool = randomPool({ customQuests: [], disabledQuests: disabled });
+    const pool = randomPool({ customQuests: [], disabledQuests: disabled }, 99);
     const day = generateDay('2026-11-15', 1, 2, pool);
     expect(day.quests).toHaveLength(9);
     expect(day.quests.filter((q) => q.extra)).toHaveLength(4);
@@ -51,7 +51,7 @@ describe('custom and disabled quests', () => {
   });
 
   it('falls back to all possible exercises when everything is disabled', () => {
-    const pool = randomPool({ customQuests: [], disabledQuests: QUEST_POOL.map((q) => q.id) });
+    const pool = randomPool({ customQuests: [], disabledQuests: QUEST_POOL.map((q) => q.id) }, 99);
     expect(pool.length).toBeGreaterThan(0);
     expect(pool.some((q) => q.id === 'pullups')).toBe(false);
   });

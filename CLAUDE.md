@@ -16,6 +16,7 @@ Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf E
   gezählte Wiederholungen/Zeit oder Daten aus Samsung Health.
 - Erfolge (Bronze/Silber/Gold), Werte mit Klasse (Krieger, Läufer, …) und Vergleich 7 Tage / seit Tag 1.
 - Ausrüstung und Möglichkeiten (Hanteln, Schwimmbad, „keine Sprungübungen“ …) steuern, welche Übungen kommen.
+- Manche Extra-Übungen kommen erst ab einem Spieler-Level (`EXERCISE_MIN_LEVEL` in game.ts, gilt auch für die Arena; Pflicht und eigene Quests nie); Today zeigt einmal „Neu freigeschaltet“.
 - Kamera-Zähler (MediaPipe Pose, läuft nur auf dem Handy; die meisten Übungen gehen von der Seite und von vorne, die App sagt, wenn die Ansicht nicht passt) und Samsung Health über Health Connect (Schritte, Läufe,
   Radfahren, Schwimmen, Stockwerke, Krafttraining).
 - **Nachweis-Pflicht:** Jede Quest und jeder Arena-Treffer braucht einen Nachweis (`proof.ts`): Kamera zählt (Wiederholungen,

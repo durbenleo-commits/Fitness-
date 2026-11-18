@@ -11,6 +11,9 @@ import {
   fixedQuests,
   isCoreQuest,
   isGameState,
+  levelFromXp,
+  minLevelOf,
+  totalXp,
   readingOn,
   makeCustomQuest,
   toDateKey,
@@ -288,20 +291,24 @@ function FixedQuests({ game }: { game: Game }) {
 function BuiltInQuests({ game }: { game: Game }) {
   const { state } = game;
   const [guide, setGuide] = useState<string | null>(null);
+  const level = levelFromXp(totalXp(state)).level;
   return (
     <fieldset className="field">
       <legend>Übungen für die Extras</legend>
       <p className="small-text">
         Aus diesen Übungen kommen jeden Tag {EXTRA_QUESTS_PER_DAY} wechselnde Extra-Quests. Sie sind freiwillig und bringen zusätzliche XP.
         Schalte Übungen aus, die du nicht machen kannst oder willst. Gilt ab morgen. Tippe auf eine Übung, um zu sehen, wie sie geht.
+        Manche Übungen kommen erst ab einem höheren Level dazu.
       </p>
       <ul className="quest-list">
         {QUEST_POOL.filter((q) => !q.retired && !q.fixed && !isCoreQuest(q.id) && q.id !== READ_QUEST).map((q) => {
           const reason = unavailableReason(q, state.profile);
           const proof = proofName(proofFor({ templateId: q.id, unit: q.unit, amount: q.base }));
-          const enabled = !reason && !state.disabledQuests.includes(q.id);
+          const lockedUntil = minLevelOf(q) > level ? minLevelOf(q) : null;
+          const enabled = !reason && !lockedUntil && !state.disabledQuests.includes(q.id);
+          const sub = reason ?? ATTR_LABEL[q.attr];
           return (
-            <li key={q.id} className={`attr-${q.attr} ${enabled ? '' : 'off'}`}>
+            <li key={q.id} className={`attr-${q.attr} ${enabled ? '' : 'off'} ${lockedUntil ? 'locked' : ''}`}>
               <AttrTile attr={q.attr} size="sm" />
               {hasExerciseAnim(q.id) ? (
                 <button type="button" className="ql-text ql-guide" onClick={() => setGuide(q.id)} aria-label={`${q.title}: Anleitung ansehen`}>
@@ -309,17 +316,23 @@ function BuiltInQuests({ game }: { game: Game }) {
                     {q.title} <Icon name="play" size={15} />
                   </strong>
                   <span>
-                    {reason ?? ATTR_LABEL[q.attr]} · {proof}
+                    {sub} · {proof}
                   </span>
                 </button>
               ) : (
                 <label className="ql-text switch-label" htmlFor={`q-${q.id}`}>
                   <strong>{q.title}</strong>
                   <span>
-                    {reason ?? ATTR_LABEL[q.attr]} · {proof}
+                    {sub} · {proof}
                   </span>
                 </label>
               )}
+              {lockedUntil ? (
+                <span className="lock-tag" aria-label={`${q.title}: gesperrt bis Level ${lockedUntil}`}>
+                  <Icon name="lock" size={14} />
+                  ab Level {lockedUntil}
+                </span>
+              ) : (
               <input
                 id={`q-${q.id}`}
                 aria-label={`${q.title} in den Extras`}
@@ -330,6 +343,7 @@ function BuiltInQuests({ game }: { game: Game }) {
                 checked={enabled}
                 onChange={(e) => game.setQuestEnabled(q.id, e.target.checked)}
               />
+              )}
             </li>
           );
         })}
