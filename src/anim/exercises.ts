@@ -194,8 +194,8 @@ defs.squats = {
     }),
     easy: (() => {
       // split stance, only up and down, one hand on a chair beside you
-      const hand: Vec = [-6, -100];
-      const up = P({ root: [36, -90], torso: -90, head: -88, nl: planted(78), fl: onBall([-6, 0], 40), na: relTo('pelvis', [4, -4], 100), fa: grip(hand, 30) });
+      const hand: Vec = [-24, -89];
+      const up = P({ root: [36, -90], torso: -90, head: -88, nl: planted(78), fl: onBall([-6, 0], 40), na: relTo('pelvis', [4, -4], 100), fa: grip(hand, 8, -1) });
       const dn = { ...up, root: [36, -72] as Vec, fl: onBall([-6, 0], 52) };
       return V('', ['Schrittstellung, eine Hand an Stuhl oder Wand', 'Hinteres Knie langsam Richtung Boden', 'Nur so tief, wie es angenehm ist'], 2.8, [K(0, up), K(0.1, up), K(0.5, dn), K(0.6, dn), K(0.92, up)], {
         props: [{ k: 'chair', at: [-44, 0], w: 40, h: 40, facing: 1 }],
