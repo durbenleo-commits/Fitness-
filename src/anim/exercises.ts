@@ -377,7 +377,7 @@ defs.sideplank = {
 {
   const BAR: Vec = [4, -252];
   const hands = (c = -90) => ({ na: grip([BAR[0] - 1, BAR[1] + 9], c, 1), fa: grip([BAR[0] + 1, BAR[1] + 9], c, 1) });
-  const hang = (py: number, t = -92, legs: Partial<Pose> = {}) => P({ root: [-2, py], torso: t, head: t, nl: L(100, 138, 100), fl: L(96, 132, 96), ...hands(), ...legs });
+  const hang = (py: number, t = -92, legs: Partial<Pose> = {}, px = -2) => P({ root: [px, py], torso: t, head: t, nl: L(100, 138, 100), fl: L(96, 132, 96), ...hands(), ...legs });
   const pullCues = ['Schulterbreit greifen, ganz aushängen', 'Brust zur Stange ziehen, bis das Kinn darüber ist', 'Kontrolliert wieder ablassen'];
   // Australian: body straight under a low bar, heels on the floor, head to the left
   const LOW: Vec = [-70, -102];
@@ -404,11 +404,11 @@ defs.sideplank = {
       still: 0.5,
     });
   defs.pullups = {
-    normal: V('', pullCues, 2.8, [K(0, hang(-116)), K(0.12, hang(-116)), K(0.5, hang(-160, -98)), K(0.62, hang(-160, -98))], { props: [{ k: 'bar', at: BAR }], still: 0.5 }),
+    normal: V('', pullCues, 2.8, [K(0, hang(-116)), K(0.12, hang(-116)), K(0.5, hang(-176, -97, {}, -14)), K(0.62, hang(-176, -97, {}, -14))], { props: [{ k: 'bar', at: BAR }], still: 0.5 }),
     easy: ausV(['Tiefe Stange, Körper schräg darunter, Fersen am Boden', 'Brust zur Stange ziehen', 'Körper bleibt gerade wie ein Brett']),
   };
   defs.chinups = {
-    normal: V('', ['Untergriff: Handflächen zeigen zu dir', 'Brust zur Stange ziehen, Kinn darüber', 'Langsam ganz ablassen'], 2.8, [K(0, hang(-116)), K(0.12, hang(-116)), K(0.5, hang(-160, -96)), K(0.62, hang(-160, -96))], { props: [{ k: 'bar', at: BAR }], still: 0.5 }),
+    normal: V('', ['Untergriff: Handflächen zeigen zu dir', 'Brust zur Stange ziehen, Kinn darüber', 'Langsam ganz ablassen'], 2.8, [K(0, hang(-116)), K(0.12, hang(-116)), K(0.5, hang(-176, -95, {}, -14)), K(0.62, hang(-176, -95, {}, -14))], { props: [{ k: 'bar', at: BAR }], still: 0.5 }),
     easy: ausV(['Tiefe Stange, Untergriff', 'Körper gerade, Fersen am Boden', 'Brust zur Stange ziehen, langsam zurück']),
   };
   const kneesUp = hang(-128, -98, { nl: L(-12, 82, 20), fl: L(-14, 80, 18) });
@@ -591,7 +591,7 @@ defs.sideplank = {
   const A2 = body(drivenSoft, extended);
   const B2 = body(extended, drivenSoft);
   defs.mountain = {
-    normal: V('', ['Hände unter den Schultern, Körper gerade', 'Knie abwechselnd zügig Richtung Brust', 'Hüfte bleibt unten'], 1, [K(0, A), K(0.5, B)], { contacts: [{ j: 'nWrist', y: 0, r: SK.wristLift }], still: 0.25 }),
+    normal: V('', ['Hände unter den Schultern, Körper gerade', 'Knie abwechselnd zügig Richtung Brust', 'Hüfte bleibt unten'], 1, [K(0, A), K(0.5, B)], { contacts: [{ j: 'nWrist', y: 0, r: SK.wristLift }], still: 0 }),
     easy: V('', ['Hände unter den Schultern', 'Ein Knie langsam nach vorne, Fuß wieder ablegen', 'Dann das andere Bein'], 2.6, [K(0, A2), K(0.2, A2), K(0.5, B2), K(0.7, B2)], { contacts: [{ j: 'nWrist', y: 0, r: SK.wristLift }], still: 0.1 }),
   };
 }

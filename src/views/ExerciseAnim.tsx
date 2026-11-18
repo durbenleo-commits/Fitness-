@@ -345,12 +345,16 @@ class Puppet {
         return none;
       }
       case 'bar': {
-        // bar seen end-on, held by a bracket from the top (high bar) or a stand on the floor (low bar)
+        // bar seen end-on. Low bar: on a stand. High bar: a rack behind the figure (post + top arm).
         const low = at[1] > -160;
-        const d = low ? `M${at[0]} ${at[1]}V0M${at[0] - 16} 0H${at[0] + 16}` : `M${at[0] - 4} ${at[1]}L${at[0] - 26} ${this.vb.y0 - 4}`;
-        el('path', { d, stroke: OUT, 'stroke-width': 9, 'stroke-linecap': 'round' }, parent);
-        el('path', { d, stroke: '#7d78c9', 'stroke-width': 5, 'stroke-linecap': 'round' }, parent);
-        el('circle', { cx: at[0], cy: at[1], r: 6.5, fill: `url(#${this.uid}metal)`, stroke: OUT, 'stroke-width': 2.5 }, parent);
+        const px = at[0] - 78;
+        const d = low ? `M${at[0]} ${at[1]}V0M${at[0] - 16} 0H${at[0] + 16}` : `M${px} 0V${at[1] - 10}H${at[0]}M${px - 18} 0H${px + 18}`;
+        el('path', { d, stroke: OUT, 'stroke-width': 11, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', fill: 'none' }, parent);
+        el('path', { d, stroke: '#7d78c9', 'stroke-width': 6.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', fill: 'none' }, parent);
+        if (!low) el('path', { d: `M${at[0]} ${at[1] - 10}V${at[1]}`, stroke: OUT, 'stroke-width': 5, 'stroke-linecap': 'round' }, parent);
+        // the bar itself sits in front of the hands so the grip reads as wrapped around it
+        const barEnd = el('g', {}, this.propsFront);
+        el('circle', { cx: at[0], cy: at[1], r: 7, fill: `url(#${this.uid}metal)`, stroke: OUT, 'stroke-width': 2.5 }, barEnd);
         return none;
       }
       case 'post': {

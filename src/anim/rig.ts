@@ -473,9 +473,9 @@ export function propBounds(p: Prop): Box | null {
     case 'box':
       return { x0: at[0], y0: -h, x1: at[0] + w, y1: 0 };
     case 'wall':
-      return { x0: at[0] - 8, y0: -230, x1: at[0] + 8, y1: 0 };
+      return { x0: at[0] - 8, y0: -150, x1: at[0] + 8, y1: 0 };
     case 'bar':
-      return { x0: at[0] - 30, y0: at[1] - 10, x1: at[0] + 10, y1: at[1] + 6 };
+      return at[1] > -160 ? { x0: at[0] - 30, y0: at[1] - 10, x1: at[0] + 10, y1: at[1] + 6 } : { x0: at[0] - 100, y0: at[1] - 18, x1: at[0] + 10, y1: 0 };
     case 'post':
       return { x0: at[0] - 8, y0: at[1] - 8, x1: at[0] + 8, y1: 0 };
     case 'stairs':
