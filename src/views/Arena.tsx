@@ -17,7 +17,9 @@ import { PRESENCE, SCANNABLE } from '../pose';
 import { phaseProof, scanTarget, scanToAmount } from '../proof';
 import type { Game } from '../store';
 import { AttrTile, Icon } from './Icons';
+import { ExerciseGuide } from './ExerciseGuide';
 import { Scanner } from './Scanner';
+import { hasExerciseAnim } from '../anim/exercises';
 import { Sprite } from './Sprites';
 
 const phaseAttr = (p: BattlePhase): QuestAttr =>
@@ -116,6 +118,7 @@ function BattleView({ battle: b, game, today }: { battle: Battle; game: Game; to
   const [hit, setHit] = useState(0);
   const [hitText, setHitText] = useState('');
   const [scan, setScan] = useState<ScanPlan | null>(null);
+  const [guide, setGuide] = useState<BattlePhase | null>(null);
 
   const attack = (phase: BattlePhase, amount: number) => {
     const before = phaseProgress(b, phase, health);
@@ -213,6 +216,7 @@ function BattleView({ battle: b, game, today }: { battle: Battle; game: Game; to
                 health={game.state.health.connected ? 'connected' : game.health.supported ? 'off' : 'browser'}
                 hasToday={p.log.some((l) => l.date === today)}
                 onCamera={() => startScan(p)}
+                onGuide={p.kind === 'exercise' && p.exerciseId && hasExerciseAnim(p.exerciseId) ? () => setGuide(p) : undefined}
                 onUndo={() => game.undoHit(b.id, p.id)}
               />
             ))}
@@ -220,6 +224,8 @@ function BattleView({ battle: b, game, today }: { battle: Battle; game: Game; to
           <p className="cmd-hint">Jeder Treffer braucht einen Nachweis: Die Kamera zählt mit, Schritte und Training kommen aus Samsung Health.</p>
         </div>
       )}
+
+      {guide?.exerciseId && <ExerciseGuide exerciseId={guide.exerciseId} easy={!!guide.easy} onClose={() => setGuide(null)} />}
 
       {scan && (
         <Scanner
@@ -250,9 +256,10 @@ function Move(props: {
   health: 'connected' | 'off' | 'browser';
   hasToday: boolean;
   onCamera: () => void;
+  onGuide?: () => void;
   onUndo: () => void;
 }) {
-  const { phase: p, active, progress, health, hasToday, onCamera, onUndo } = props;
+  const { phase: p, active, progress, health, hasToday, onCamera, onGuide, onUndo } = props;
   const proof = phaseProof(p);
   const fromHealth = proof.kind === 'health';
   const done = progress >= p.target;
@@ -299,6 +306,12 @@ function Move(props: {
             <Icon name={proof.kind === 'presence' ? 'timer' : 'camera'} size={18} />
             Mit Kamera angreifen
           </button>
+          {onGuide && (
+            <button type="button" className="guide-link" onClick={onGuide} aria-label={`${p.title}: Anleitung mit Animation`}>
+              <Icon name="play" size={16} />
+              Anleitung
+            </button>
+          )}
         </div>
       )}
       {hasToday && !fromHealth && (
