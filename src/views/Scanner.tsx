@@ -283,7 +283,7 @@ export function Scanner(props: {
                 </span>
               </div>
               <p className="pose-muscles">Dehnt: {pose.muscles}</p>
-              <p>{pose.hint}</p>
+              <p>{easy && pose.easyHint ? pose.easyHint : pose.hint}</p>
               <span className="pose-bar" aria-hidden>
                 <span style={{ width: `${(poseSec / (STRETCH_POSE_MS / 1000)) * 100}%` }} />
               </span>

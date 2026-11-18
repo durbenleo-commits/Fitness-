@@ -47,6 +47,23 @@ export const BUILT_IN_PROOF: Record<string, BuiltInProof> = {
   swings: { kind: 'camera' },
   burpees: { kind: 'camera' },
   mountain: { kind: 'camera' },
+  // calisthenics (pose detection in pose.ts, ids as here)
+  dips: { kind: 'camera' },
+  pike: { kind: 'camera' },
+  diamond: { kind: 'camera' },
+  bridge: { kind: 'camera' },
+  legraises: { kind: 'camera' },
+  hollow: { kind: 'camera' },
+  sideplank: { kind: 'camera' },
+  superman: { kind: 'camera' },
+  splitsquat: { kind: 'camera' },
+  pistol: { kind: 'camera' },
+  jumpsquats: { kind: 'camera' },
+  handstand: { kind: 'camera' },
+  chinups: { kind: 'camera' },
+  kneeraises: { kind: 'camera' },
+  lsit: { kind: 'camera' },
+  calves: { kind: 'camera' },
   // stretch routine: poses held in front of the camera (quests in minutes, scan in seconds)
   stretch: { kind: 'camera', scanId: 'stretch' },
   mobility: { kind: 'camera', scanId: 'stretch' },
@@ -58,6 +75,12 @@ export const BUILT_IN_PROOF: Record<string, BuiltInProof> = {
   rope: { kind: 'presence' },
   walk: { kind: 'presence' }, // retired, still on old days
 };
+
+/**
+ * Camera exercises that are "pro Bein" but counted on either leg: the camera target is doubled
+ * (10 pro Bein = 20 counted).
+ */
+export const PER_LEG_SCANS: readonly string[] = ['lunges', 'splitsquat', 'pistol'];
 
 /** Seconds of presence per unit for custom quests (and unknown units). */
 const PRESENCE_SECONDS_PER_UNIT: Record<string, number> = {
@@ -87,8 +110,8 @@ export function proofFor(q: { templateId: string; unit: string; amount: number }
     const scanId = builtIn.scanId ?? q.templateId;
     // the stretch routine counts seconds, its quests are in minutes
     if (scanId === 'stretch') return { kind: 'camera', scanId, seconds: Math.max(1, Math.round(q.unit === 'Sek.' ? q.amount : q.amount * 60)) };
-    // lunges are counted on both legs: "pro Bein" means the camera target is doubled
-    if (scanId === 'lunges' && q.unit === 'pro Bein') return { kind: 'camera', scanId, reps: Math.max(1, Math.ceil(q.amount * 2)), perUnit: 2 };
+    // lunges (split squats, pistols) are counted on both legs: "pro Bein" means the camera target is doubled
+    if (PER_LEG_SCANS.includes(scanId) && q.unit === 'pro Bein') return { kind: 'camera', scanId, reps: Math.max(1, Math.ceil(q.amount * 2)), perUnit: 2 };
     return { kind: 'camera', scanId };
   }
   // built-in presence exercises are all measured in minutes

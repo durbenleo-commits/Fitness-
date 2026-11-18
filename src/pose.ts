@@ -8,8 +8,8 @@ export interface Point {
 }
 
 // MediaPipe pose landmark indices
-const L = { shoulder: 11, elbow: 13, wrist: 15, hip: 23, knee: 25, ankle: 27 };
-const R = { shoulder: 12, elbow: 14, wrist: 16, hip: 24, knee: 26, ankle: 28 };
+const L = { ear: 7, shoulder: 11, elbow: 13, wrist: 15, hip: 23, knee: 25, ankle: 27, heel: 29, toe: 31 };
+const R = { ear: 8, shoulder: 12, elbow: 14, wrist: 16, hip: 24, knee: 26, ankle: 28, heel: 30, toe: 32 };
 const NOSE = 0;
 
 export type ScanKind = 'reps' | 'hold' | 'presence';
@@ -45,6 +45,10 @@ const SIDE_OR_FRONT_SETUP =
 const LEGS_SETUP =
   'Stell das Handy seitlich oder vor dich, etwa 2–3 m entfernt und nicht höher als deine Hüfte, sodass du von Kopf bis Fuß zu sehen bist.';
 
+/** Floor exercises lying down: the movement goes up and down, seen best from the side. */
+const LYING_SIDE_SETUP =
+  'Leg das Handy seitlich neben dich auf den Boden, etwa 2 m entfernt, sodass du im Liegen von der Seite ganz zu sehen bist. Nur von der Seite, nicht an Kopf oder Füße.';
+
 /** Exercises the camera can check, with how to set up the phone and which view the detector needs. */
 export const SCANNABLE: Record<string, ScanSpec> = {
   pushups: { kind: 'reps', view: 'any', setup: SIDE_OR_FRONT_SETUP, cue: 'Runter bis die Arme gebeugt sind, dann ganz hoch.', easyCue: 'Knie am Boden lassen. Runter bis die Arme gebeugt sind, dann ganz hoch.' },
@@ -60,8 +64,25 @@ export const SCANNABLE: Record<string, ScanSpec> = {
   rows: { kind: 'reps', view: 'side', setup: 'Stell das Handy etwa 2 m entfernt seitlich auf, sodass Oberkörper und Arme von der Seite zu sehen sind. Nur von der Seite, nicht von vorne.', cue: 'Band zum Bauch ziehen, dann Arme ganz strecken.' },
   swings: { kind: 'reps', view: 'any', setup: 'Stell das Handy etwa 2–3 m entfernt seitlich oder vor dich, sodass du von Kopf bis Fuß zu sehen bist.', cue: 'Kugel bis auf Schulterhöhe schwingen, dann zwischen die Beine zurück.' },
   burpees: { kind: 'reps', view: 'any', setup: 'Stell das Handy etwa 2–3 m entfernt seitlich oder vor dich, sodass du von Kopf bis Fuß zu sehen bist, auch im Liegestütz.', cue: 'Runter in den Liegestütz, dann ganz aufrichten.', easyCue: 'Ohne Sprung: Beine nacheinander in den Liegestütz setzen, dann ganz aufrichten.' },
-  stretch: { kind: 'hold', view: 'any', setup: 'Stell das Handy etwa 2–3 m entfernt schräg vor dich, sodass du von Kopf bis Fuß zu sehen bist. Bei den Seitneigungen schaust du zur Kamera, bei der Ausfallschritt-Dehnung stehst du seitlich.', cue: 'Halte jede Dehnung 30 Sekunden. Die Zeit läuft nur, solange die Haltung stimmt.' },
+  stretch: { kind: 'hold', view: 'any', setup: 'Stell das Handy etwa 2–3 m entfernt schräg vor dich, sodass du von Kopf bis Fuß zu sehen bist. Bei den Seitneigungen schaust du zur Kamera, bei der Ausfallschritt-Dehnung stehst du seitlich.', cue: 'Halte jede Dehnung 30 Sekunden. Die Zeit läuft nur, solange die Haltung stimmt.', easyCue: 'Sanft dehnen, nicht so tief: halte jede Dehnung 30 Sekunden. Die Zeit läuft nur, solange die Haltung stimmt.' },
   mountain: { kind: 'reps', view: 'side', setup: 'Stell das Handy seitlich auf den Boden, etwa 2 m entfernt, sodass du von der Seite ganz zu sehen bist. Nur von der Seite, nicht vor deinen Kopf.', cue: 'Im Liegestütz abwechselnd ein Knie zur Brust ziehen.', easyCue: 'Im Liegestütz langsam abwechselnd ein Knie zur Brust ziehen.' },
+  // ---- calisthenics ----
+  dips: { kind: 'reps', view: 'side', setup: 'Stell das Handy seitlich auf, etwa 2 m entfernt, sodass du von der Seite mit Armen und Hüfte zu sehen bist. Nur von der Seite, nicht von vorne.', cue: 'Runter, bis die Oberarme etwa waagerecht sind, dann Arme ganz strecken.', easyCue: 'Hände hinter dir auf einem Stuhl, Füße nah: runter, bis die Arme gebeugt sind, dann ganz strecken.' },
+  pike: { kind: 'reps', view: 'side', setup: 'Stell das Handy seitlich auf den Boden, etwa 2 m entfernt, sodass du von der Seite ganz zu sehen bist. Nur von der Seite, nicht vor deinen Kopf.', cue: 'Hüfte hoch wie ein umgedrehtes V. Kopf Richtung Boden, dann Arme ganz strecken.', easyCue: 'Hüfte nur leicht anheben. Kopf Richtung Boden, dann Arme ganz strecken.' },
+  diamond: { kind: 'reps', view: 'any', setup: `${SIDE_OR_FRONT_SETUP} Von vorne prüft die App auch, ob die Hände eng zusammen sind.`, cue: 'Hände unter der Brust zu einer Raute. Runter bis die Arme gebeugt sind, dann ganz hoch.', easyCue: 'Knie am Boden, Hände zu einer Raute. Runter bis die Arme gebeugt sind, dann ganz hoch.' },
+  bridge: { kind: 'reps', view: 'side', setup: LYING_SIDE_SETUP, cue: 'Auf dem Rücken, Knie gebeugt: Hüfte hoch, bis Schultern, Hüfte und Knie eine Linie bilden, dann ablegen.', easyCue: 'Auf dem Rücken, Knie gebeugt: Hüfte halb hoch, dann ablegen.' },
+  legraises: { kind: 'reps', view: 'side', setup: LYING_SIDE_SETUP, cue: 'Auf dem Rücken: gestreckte Beine bis senkrecht heben, dann langsam fast ablegen.', easyCue: 'Auf dem Rücken: Knie gebeugt zur Brust heben, dann wieder absenken.' },
+  hollow: { kind: 'hold', view: 'side', setup: LYING_SIDE_SETUP, cue: 'Auf dem Rücken: Schultern und gestreckte Beine knapp über dem Boden halten. Die Zeit läuft nur in der Haltung.', easyCue: 'Auf dem Rücken: Schultern anheben, Knie gebeugt in der Luft halten. Die Zeit läuft nur in der Haltung.' },
+  sideplank: { kind: 'hold', view: 'front', setup: 'Leg das Handy etwa 2 m vor dich auf den Boden, sodass du im Seitstütz mit Brust oder Rücken zur Kamera ganz zu sehen bist. Nur von vorne, nicht an Kopf oder Füße.', cue: 'Auf einem Unterarm, Körper gerade von Kopf bis Fuß. Die Zeit läuft nur in der Haltung.', easyCue: 'Auf Unterarm und Knien, Schultern, Hüfte und Knie in einer Linie. Die Zeit läuft nur in der Haltung.' },
+  superman: { kind: 'hold', view: 'side', setup: LYING_SIDE_SETUP, cue: 'Auf dem Bauch: Arme gestreckt nach vorn, Brust und Beine anheben. Die Zeit läuft nur in der Haltung.', easyCue: 'Auf dem Bauch: nur die gestreckten Arme anheben, Beine bleiben liegen. Die Zeit läuft nur in der Haltung.' },
+  splitsquat: { kind: 'reps', view: 'side', setup: 'Stell das Handy seitlich auf, etwa 2–3 m entfernt und nicht höher als deine Hüfte, sodass du von Kopf bis Fuß zu sehen bist. Nur von der Seite, nicht von vorne.', cue: 'Hinterer Fuß auf einer Bank oder einem Stuhl. Vorderes Knie beugen, bis der Oberschenkel waagerecht ist, dann hoch. Bein nach der Hälfte wechseln.', easyCue: 'Beide Füße am Boden, Schrittstellung. Hinteres Knie Richtung Boden, dann hoch. Bein nach der Hälfte wechseln.' },
+  pistol: { kind: 'reps', view: 'any', setup: LEGS_SETUP, cue: 'Auf einem Bein ganz tief in die Hocke, anderes Bein gestreckt nach vorn, dann hoch. Bein nach der Hälfte wechseln.', easyCue: 'Auf einem Bein langsam auf einen Stuhl setzen, anderes Bein nach vorn, dann wieder hoch. Bein nach der Hälfte wechseln.' },
+  jumpsquats: { kind: 'reps', view: 'any', setup: LEGS_SETUP, cue: 'In die Hocke, dann hoch abspringen. Gezählt wird erst der Sprung.', easyCue: 'Schnell halb in die Hocke und ganz aufrichten, ohne Sprung.' },
+  handstand: { kind: 'hold', view: 'side', setup: 'Stell das Handy seitlich auf, etwa 2–3 m entfernt, sodass du an der Wand von Händen bis Füßen zu sehen bist. Nur von der Seite, nicht von vorne.', cue: 'Handstand an der Wand, Arme gestreckt. Die Zeit läuft nur in der Haltung.', easyCue: 'Füße auf einem Stuhl, Hände am Boden, Hüfte hoch über den Schultern. Die Zeit läuft nur in der Haltung.' },
+  chinups: { kind: 'reps', view: 'any', setup: 'Stell das Handy etwa 2–3 m entfernt vor dich oder seitlich auf, sodass Stange, Kopf und Arme zu sehen sind.', cue: 'Handflächen zu dir. Kinn über die Stange, dann Arme ganz strecken.', easySetup: 'Stell das Handy seitlich auf, etwa 2 m entfernt, sodass du unter der Stange von der Seite ganz zu sehen bist. Nur von der Seite.', easyCue: 'Schräg unter der Stange, Handflächen zu dir: Brust zur Stange ziehen, dann Arme ganz strecken.', easyView: 'side' },
+  kneeraises: { kind: 'reps', view: 'side', setup: 'Stell das Handy seitlich auf, etwa 2–3 m entfernt, sodass du an der Stange von Händen bis Füßen zu sehen bist. Nur von der Seite, nicht von vorne.', cue: 'An der Stange hängen, beide Knie bis über die Hüfte ziehen, dann Beine ganz strecken.', easySetup: LYING_SIDE_SETUP, easyCue: 'Auf dem Rücken: Knie gebeugt zur Brust heben, dann wieder absenken.' },
+  lsit: { kind: 'hold', view: 'side', setup: 'Stell das Handy seitlich auf den Boden, etwa 2 m entfernt, sodass du im Sitzen von der Seite ganz zu sehen bist. Nur von der Seite, nicht von vorne.', cue: 'Hände neben der Hüfte, Arme gestreckt, Po und gestreckte Beine vom Boden heben. Die Zeit läuft nur in der Haltung.', easyCue: 'Hände neben der Hüfte, Arme gestreckt, Po und Füße vom Boden heben, Knie angezogen. Die Zeit läuft nur in der Haltung.' },
+  calves: { kind: 'reps', view: 'side', setup: 'Stell das Handy seitlich auf den Boden, etwa 2 m entfernt, sodass du von der Seite ganz und die Füße gut zu sehen sind. Nur von der Seite, nicht von vorne.', cue: 'Beine gestreckt, ganz auf die Zehenspitzen, dann Fersen ganz absenken.', easyCue: 'Mit einer Hand an der Wand halten. Auf die Zehenspitzen, dann Fersen ganz absenken.' },
 };
 
 export const isScannable = (exerciseId: string | undefined) => !!exerciseId && exerciseId in SCANNABLE;
@@ -113,13 +134,13 @@ const mid = (a: Point, b: Point): Point => ({ x: (a.x + b.x) / 2, y: (a.y + b.y)
 
 /** German names of body parts, in head-to-feet order, for "… nicht zu sehen" hints. */
 const PART_NAMES: [number[], string][] = [
-  [[NOSE], 'Kopf'],
+  [[NOSE, L.ear, R.ear], 'Kopf'],
   [[L.shoulder, R.shoulder], 'Schultern'],
   [[L.elbow, R.elbow], 'Ellbogen'],
   [[L.wrist, R.wrist], 'Handgelenke'],
   [[L.hip, R.hip], 'Hüfte'],
   [[L.knee, R.knee], 'Knie'],
-  [[L.ankle, R.ankle], 'Füße'],
+  [[L.ankle, R.ankle, L.heel, R.heel, L.toe, R.toe], 'Füße'],
 ];
 
 /** German names of the body parts among `idx` that are not clearly visible (visibility <= `min`); empty when all are seen. */
@@ -320,6 +341,23 @@ function frontBurpee(lm: Point[], aspect: number): 'down' | 'up' | null {
   return gap < 0.6 * sw && !legsUnder ? 'down' : null;
 }
 
+/**
+ * The player's own standing value of a height measure (see hipOverAnkles), learned only from
+ * frames where the player stands: it jumps up at once and follows lower values slowly.
+ */
+const learnStand = (old: number | undefined, raw: number, standing: boolean) =>
+  !standing ? old : old === undefined || raw > old ? raw : old + 0.05 * (raw - old);
+
+/** Face down (prone): nose clearly below the ear in the image. Face up: clearly above. Unknown if not seen. */
+function faceDir(lm: Point[], s: typeof L): 'down' | 'up' | undefined {
+  const [n, e] = [lm[NOSE], lm[s.ear]];
+  if (vis(n) <= 0.5 || vis(e) <= 0.5) return undefined;
+  const d = Math.hypot(n.x - e.x, n.y - e.y);
+  if (n.y - e.y > 0.4 * d && d > 0) return 'down';
+  if (e.y - n.y > 0.4 * d && d > 0) return 'up';
+  return undefined;
+}
+
 // ---------- counter ----------
 
 export type Phase = 'up' | 'down' | 'unknown';
@@ -344,6 +382,8 @@ export interface ScanState {
   hang?: { nose: number; wrist: number };
   // squats and lunges seen from the front: the player's standing hip height (see hipOverAnkles)
   standRef?: number;
+  // jump squats: image height of the floor under the feet (mean ankle y, follows slowly; see step)
+  floor?: number;
   // UI feedback, set per frame: how the player is seen right now (the view the detector used), the
   // German names of the needed body parts that are not clearly visible (only while bodyVisible is
   // false), and the view the exercise needs while the player is clearly seen from the other one
@@ -380,29 +420,30 @@ export interface StretchPose {
   muscles: string; // German, the main muscles this pose stretches
   needs: number[]; // landmarks that must be clearly visible
   view?: ViewNeed; // camera view the check needs; missing = 'any'
-  /** null when the needed body parts are not clearly visible, else whether the pose is held. */
-  check: (lm: Point[], aspect: number) => boolean | null;
+  easyHint?: string; // German, the gentler version (easy variant), if it differs
+  /** null when the needed body parts are not clearly visible, else whether the pose is held (`easy`: gentler, less deep). */
+  check: (lm: Point[], aspect: number, easy?: boolean) => boolean | null;
 }
 
 /** A stretch pose whose `held` test only runs once all `needs` are clearly visible. */
-function stretchPose(p: Omit<StretchPose, 'check'>, held: (lm: Point[], aspect: number) => boolean): StretchPose {
-  return { ...p, check: (lm, aspect) => (visible(lm, p.needs) ? held(lm, aspect) : null) };
+function stretchPose(p: Omit<StretchPose, 'check'>, held: (lm: Point[], aspect: number, easy: boolean) => boolean): StretchPose {
+  return { ...p, check: (lm, aspect, easy = false) => (visible(lm, p.needs) ? held(lm, aspect, easy) : null) };
 }
 
 const kneeAngle = (lm: Point[], s: typeof L, aspect: number) => angle(lm[s.hip], lm[s.knee], lm[s.ankle], aspect);
 const elbowAngle = (lm: Point[], s: typeof L, aspect: number) => angle(lm[s.shoulder], lm[s.elbow], lm[s.wrist], aspect);
 
-/** Side bend: the wrist of `up` is above the head and the shoulder line drops by more than 12° toward the other side. */
+/** Side bend: the wrist of `up` is above the head and the shoulder line drops by more than 12° (easy: 7°) toward the other side. */
 function sideBend(id: string, name: string, hint: string, muscles: string, up: typeof L, other: typeof L): StretchPose {
   // The shoulder line tilts sideways: only seen with the chest toward the camera. From the side the
   // shoulders overlap and their line can point anywhere, so a clear side view never counts.
-  return stretchPose({ id, name, hint, muscles, needs: [NOSE, L.shoulder, R.shoulder, up.wrist], view: 'front' }, (lm, aspect) => {
+  return stretchPose({ id, name, hint, muscles, needs: [NOSE, L.shoulder, R.shoulder, up.wrist], view: 'front', easyHint: `${hint} Nur leicht neigen.` }, (lm, aspect, easy) => {
     const handUp = lm[up.wrist].y < lm[NOSE].y;
     // The other hand stays down (if seen): with both arms up and the phone low and at an angle,
     // perspective alone tilts the shoulder line.
     const otherDown = vis(lm[other.wrist]) <= 0.5 || lm[other.wrist].y > lm[NOSE].y;
     const towardOther = lm[other.shoulder].y > lm[up.shoulder].y; // the other shoulder is lower
-    return handUp && otherDown && towardOther && tilt(lm[L.shoulder], lm[R.shoulder], aspect) > 12 && facing(lm, aspect) !== 'side';
+    return handUp && otherDown && towardOther && tilt(lm[L.shoulder], lm[R.shoulder], aspect) > (easy ? 7 : 12) && facing(lm, aspect) !== 'side';
   });
 }
 
@@ -422,11 +463,15 @@ export const STRETCH_POSES: StretchPose[] = [
       hint: 'Beine fast gestreckt, Hände unter die Knie.',
       muscles: 'Hintere Oberschenkel, Waden und unterer Rücken',
       needs: [L.hip, L.knee, L.ankle, R.hip, R.knee, R.ankle, L.wrist, R.wrist],
+      easyHint: 'Knie leicht gebeugt, Hände nur bis zu den Oberschenkeln.',
     },
-    (lm, aspect) => {
-      const straight = kneeAngle(lm, L, aspect) > 150 && kneeAngle(lm, R, aspect) > 150;
+    (lm, aspect, easy) => {
+      // Easy: knees may bend a little more, and the hands only need to reach the middle of the thighs.
+      const minKnee = easy ? 135 : 150;
+      const straight = kneeAngle(lm, L, aspect) > minKnee && kneeAngle(lm, R, aspect) > minKnee;
       const kneeY = Math.max(lm[L.knee].y, lm[R.knee].y);
-      return straight && lm[L.wrist].y > kneeY && lm[R.wrist].y > kneeY;
+      const reach = easy ? avg(Math.max(lm[L.hip].y, lm[R.hip].y), kneeY) : kneeY;
+      return straight && lm[L.wrist].y > reach && lm[R.wrist].y > reach;
     },
   ),
   sideBend('side-bend-left', 'Seitneigung links', 'Zur Kamera schauen. Rechten Arm über den Kopf, Oberkörper zur linken Seite neigen.', 'Seitlicher Rumpf und Flanke (rechte Seite)', R, L),
@@ -438,12 +483,14 @@ export const STRETCH_POSES: StretchPose[] = [
       hint: 'Aufrecht stehen, beide Arme gestreckt nach oben.',
       muscles: 'Schultern, Brustmuskeln und Rücken',
       needs: [NOSE, L.shoulder, R.shoulder, L.elbow, R.elbow, L.wrist, R.wrist, L.hip, R.hip],
+      easyHint: 'Aufrecht stehen, beide Arme nach oben, Ellbogen dürfen leicht gebeugt sein.',
     },
-    (lm, aspect) => {
+    (lm, aspect, easy) => {
       const s = side(lm);
       const up = lm[L.wrist].y < lm[NOSE].y && lm[R.wrist].y < lm[NOSE].y;
       const upright = tilt(lm[s.shoulder], lm[s.hip], aspect) > 60;
-      const straight = elbowAngle(lm, L, aspect) > 140 && elbowAngle(lm, R, aspect) > 140;
+      const minElbow = easy ? 120 : 140;
+      const straight = elbowAngle(lm, L, aspect) > minElbow && elbowAngle(lm, R, aspect) > minElbow;
       return up && upright && straight;
     },
   ),
@@ -456,20 +503,25 @@ export const STRETCH_POSES: StretchPose[] = [
       needs: [L.hip, L.knee, L.ankle, R.hip, R.knee, R.ankle],
       // Knee angles: head-on the bent front knee points at the camera and cannot be measured.
       view: 'side',
+      easyHint: 'Seitlich zur Kamera stellen. Kleiner Schritt nach vorn, vorderes Knie leicht beugen, hinteres Bein fast gestreckt.',
     },
-    (lm, aspect) => {
+    (lm, aspect, easy) => {
       const l = kneeAngle(lm, L, aspect);
       const r = kneeAngle(lm, R, aspect);
-      return (l < 120 && r > 150) || (r < 120 && l > 150);
+      const [bent, straight] = easy ? [135, 140] : [120, 150];
+      return (l < bent && r > straight) || (r < bent && l > straight);
     },
   ),
 ];
 
-/** One frame of the stretch routine: time counts only while the current pose is held. */
-function stretchStep(state: ScanState, lm: Point[], dt: number, aspect: number, base: ScanState): ScanState {
+/**
+ * One frame of the stretch routine: time counts only while the current pose is held. The easy
+ * variant ("sanft") keeps 30 s per pose but accepts gentler, less deep poses (see STRETCH_POSES).
+ */
+function stretchStep(state: ScanState, lm: Point[], dt: number, aspect: number, base: ScanState, easy: boolean): ScanState {
   const idx = state.poseIndex ?? 0;
   const pose = STRETCH_POSES[idx];
-  const ok = pose.check(lm, aspect);
+  const ok = pose.check(lm, aspect, easy);
   const view = facing(lm, aspect);
   // Seen from the wrong side for this pose (and not holding it anyway): say how to turn.
   const wrong = !ok && pose.view && pose.view !== 'any' && view && view !== pose.view ? { wrongView: pose.view } : {};
@@ -532,24 +584,30 @@ export function step(state: ScanState, lm: Point[] | undefined, t: number, aspec
    */
   const wrongView = (seen: BodyView | undefined, needed: BodyView): ScanState | null =>
     seen && seen !== needed ? { ...base, bodyVisible: true, inPosition: false, view: seen, wrongView: needed } : null;
+  /** Run another exercise's detector on this frame (same movement), keeping this exercise's id. */
+  const as = (id: string, e: boolean): ScanState => ({ ...step({ ...state, exerciseId: id }, lm, t, aspect, e), exerciseId: state.exerciseId });
 
   switch (state.exerciseId) {
     case STRETCH:
-      return stretchStep(state, pts, dt, aspect, base);
+      return stretchStep(state, pts, dt, aspect, base, easy);
     case PRESENCE: {
       // Timer for stretching and the like: runs only while the player is clearly in view.
       const miss = need([s.shoulder, s.hip]);
       return miss.length ? { ...hold(false), bodyVisible: false, missing: miss } : hold(true);
     }
-    case 'pushups': {
+    case 'pushups':
+    case 'diamond': {
       const view = bodyView(pts, aspect);
       if (view === 'front') {
         const miss = missingFront(pts, FRONT_PUSHUP_PARTS);
         if (miss.length) return lost(miss, { view });
         // Head-on: depth from how far the shoulders are above the hands. Knee push-ups count too.
         // Frames out of the push-up position are left out of the smoothing, so they cannot lag
-        // into the next frames and fake a "down".
-        if (!frontProne(pts, aspect)) return { ...base, bodyVisible: true, view, smooth: prevView === view ? state.smooth : null };
+        // into the next frames and fake a "down". Diamond push-ups: head-on the hands must also be
+        // close together under the chest (less than 0.6 shoulder widths apart); from the side the
+        // hand width cannot be seen, so it counts like a push-up.
+        const narrow = state.exerciseId !== 'diamond' || Math.abs(P(L.wrist).x - P(R.wrist).x) * aspect < 0.6 * shoulderWidth(pts, aspect);
+        if (!frontProne(pts, aspect) || !narrow) return { ...base, bodyVisible: true, view, smooth: prevView === view ? state.smooth : null };
         const d = smoothIn(view, frontPushupDepth(pts, aspect));
         return hysteresis({ ...base, bodyVisible: true, smooth: d, view }, d, 0.75, 1.15);
       }
@@ -576,7 +634,7 @@ export function step(state: ScanState, lm: Point[] | undefined, t: number, aspec
         const raw = hipOverAnkles(pts, aspect);
         const standing = Math.min(...thighDrops(pts, aspect)) > 0.85;
         const old = state.standRef;
-        const standRef = !standing ? old : old === undefined || raw > old ? raw : old + 0.05 * (raw - old);
+        const standRef = learnStand(old, raw, standing);
         const h = smoothIn(view, raw / (standRef ?? STAND_HIP_SW));
         // Lunges: standing up in the split stance (instead of with the feet together) is lower.
         const [down, up] = state.exerciseId === 'lunges' ? [0.7, 0.82] : easy ? [0.8, 0.9] : [0.7, 0.88];
@@ -829,6 +887,289 @@ export function step(state: ScanState, lm: Point[] | undefined, t: number, aspec
       });
       const phase: Phase = legs.some((l) => l.phase === 'down') ? 'down' : legs.every((l) => l.phase === 'up') ? 'up' : state.phase;
       return { ...base, bodyVisible: true, reps, legs, phase, smooth: Math.min(legs[0].smooth, legs[1].smooth), view };
+    }
+    // ---------- calisthenics ----------
+    case 'chinups':
+      // Same movement as pull-ups (and Australian pull-ups for the easy variant), only the grip differs.
+      return as('pullups', easy);
+    case 'dips': {
+      // Elbows bend backward, toward a camera behind or in front: needs the side view.
+      const view = facing(pts, aspect);
+      const wrong = wrongView(view, 'side');
+      if (wrong) return wrong;
+      const miss = need([s.shoulder, s.elbow, s.wrist, s.hip]);
+      if (miss.length) return lost(miss, { view });
+      // Torso upright and the hands pushing down (below the elbows): bending the arms while lying
+      // (push-ups) or curling (hands rise above the elbows) does not count.
+      const upright = tilt(P(s.shoulder), P(s.hip), aspect) > 50;
+      const handsDown = P(s.wrist).y > P(s.elbow).y;
+      const a = ema(angle(P(s.shoulder), P(s.elbow), P(s.wrist), aspect));
+      const next = { ...base, bodyVisible: true, smooth: a, view };
+      // Easy (bench dips, feet close): a little less deep.
+      return upright && handsDown ? hysteresis(next, a, easy ? 105 : 95, 145) : next;
+    }
+    case 'pike': {
+      const view = facing(pts, aspect, true);
+      const wrong = wrongView(view, 'side');
+      if (wrong) return wrong;
+      const miss = need([s.shoulder, s.elbow, s.wrist, s.hip, s.ankle]);
+      if (miss.length) return lost(miss, { view });
+      // Inverted V: the hips are the highest point and the body bends at the hips (below 120°, easy
+      // "flach": below 150°); the hands are on the floor below the shoulders.
+      const hipHigh = P(s.hip).y < P(s.shoulder).y && P(s.hip).y < P(s.ankle).y;
+      const piked = angle(P(s.shoulder), P(s.hip), P(s.ankle), aspect) < (easy ? 150 : 120);
+      const handsDown = P(s.wrist).y > P(s.shoulder).y;
+      const a = ema(angle(P(s.shoulder), P(s.elbow), P(s.wrist), aspect));
+      const next = { ...base, bodyVisible: true, smooth: a, view };
+      return hipHigh && piked && handsDown ? hysteresis(next, a, easy ? 110 : 100, 145) : next;
+    }
+    case 'bridge': {
+      // The hips rise toward the ceiling; head-on (camera at head or feet) that is invisible.
+      const view = facing(pts, aspect, true);
+      const wrong = wrongView(view, 'side');
+      if (wrong) return wrong;
+      const miss = need([s.shoulder, s.hip, s.knee, s.ankle]);
+      if (miss.length) return lost(miss, { view });
+      // Lying on the back: shoulders and feet on the floor (their line about level), knees bent and
+      // pointing up. Standing and bowing never passes, as shoulders and feet are far apart in height.
+      const lying = tilt(P(s.shoulder), P(s.ankle), aspect) < 30 && P(s.knee).y < P(s.hip).y;
+      const kneesBent = angle(P(s.hip), P(s.knee), P(s.ankle), aspect) < 130;
+      // Hip angle (shoulder–hip–knee): about 120–140° lying, 180° with the body in one line.
+      // Mapped to 180 − angle, so "down" = bridged (above 160°, easy "halbe Höhe": above 150°);
+      // a rep completes when the hips are lowered again (below 145°, easy 142°).
+      const v = ema(180 - angle(P(s.shoulder), P(s.hip), P(s.knee), aspect));
+      const next = { ...base, bodyVisible: true, smooth: v, view };
+      return lying && kneesBent ? hysteresis(next, v, easy ? 30 : 20, easy ? 38 : 35) : next;
+    }
+    case 'kneeraises':
+      if (easy) return as('legraises', true); // "Knieheben liegend" = leg raises with bent knees
+    // falls through
+    case 'legraises': {
+      const hanging = state.exerciseId === 'kneeraises';
+      const view = facing(pts, aspect, !hanging);
+      const wrong = wrongView(view, 'side');
+      if (wrong) return wrong;
+      if (hanging) {
+        // Hanging from the bar: hands well above the shoulders, both knees pulled up (hip angle
+        // below 105° on both legs, so marching on the spot with the arms up does not count).
+        const miss = need([s.shoulder, s.wrist, s.hip, L.knee, R.knee]);
+        if (miss.length) return lost(miss, { view });
+        const T = dist(P(s.shoulder), P(s.hip), aspect);
+        const hangs = P(s.wrist).y < P(s.shoulder).y - 0.3 * T;
+        const a = ema(Math.max(angle(P(s.shoulder), P(s.hip), P(L.knee), aspect), angle(P(s.shoulder), P(s.hip), P(R.knee), aspect)));
+        const next = { ...base, bodyVisible: true, smooth: a, view };
+        return hangs ? hysteresis(next, a, 105, 150) : next;
+      }
+      // Lying on the back, torso flat. Normal: straight legs (knee > 140°), hip angle to the ankle
+      // from about 180° (legs down) to below 110° (legs up). Easy: bent knees, hip angle to the knee.
+      const miss = need(easy ? [s.shoulder, s.hip, s.knee] : [s.shoulder, s.hip, s.knee, s.ankle]);
+      if (miss.length) return lost(miss, { view });
+      const flat = tilt(P(s.shoulder), P(s.hip), aspect) < 30;
+      const straight = easy || angle(P(s.hip), P(s.knee), P(s.ankle), aspect) > 140;
+      const a = ema(angle(P(s.shoulder), P(s.hip), P(easy ? s.knee : s.ankle), aspect));
+      const next = { ...base, bodyVisible: true, smooth: a, view };
+      return flat && straight ? hysteresis(next, a, easy ? 100 : 110, easy ? 145 : 155) : next;
+    }
+    case 'hollow': {
+      const view = facing(pts, aspect, true);
+      const wrong = wrongView(view, 'side');
+      if (wrong) return wrong;
+      const miss = need(easy ? [s.shoulder, s.hip, s.knee] : [s.shoulder, s.hip, s.knee, s.ankle]);
+      if (miss.length) return lost(miss, { view });
+      // Lying on the back (the face does not point down), shoulders lifted (more than 0.15 torso
+      // lengths above the hips, torso flatter than 45°). Normal: straight legs, ankles lifted above
+      // the hips, legs flatter than 45°. Easy: knees bent and lifted above the hips.
+      const T = dist(P(s.shoulder), P(s.hip), aspect);
+      const shouldersUp = P(s.hip).y - P(s.shoulder).y > 0.15 * T && tilt(P(s.hip), P(s.shoulder), aspect) < 45;
+      const legs = easy
+        ? P(s.knee).y < P(s.hip).y - 0.1 * T
+        : angle(P(s.hip), P(s.knee), P(s.ankle), aspect) > 150 &&
+          P(s.ankle).y < P(s.hip).y - 0.08 * dist(P(s.hip), P(s.ankle), aspect) &&
+          tilt(P(s.hip), P(s.ankle), aspect) < 45;
+      return { ...hold(shouldersUp && legs && faceDir(pts, s) !== 'down'), view };
+    }
+    case 'superman': {
+      const view = facing(pts, aspect, true);
+      const wrong = wrongView(view, 'side');
+      if (wrong) return wrong;
+      const miss = need(easy ? [s.shoulder, s.wrist, s.hip] : [s.shoulder, s.wrist, s.hip, s.knee, s.ankle]);
+      if (miss.length) return lost(miss, { view });
+      // Lying on the belly (the face does not point up), torso flatter than 35°. Arms stretched
+      // forward beyond the head and lifted (wrists above the shoulders, arm line flatter than 50°).
+      // Normal also lifts the chest (shoulders > 0.15 torso lengths above the hips) and the straight
+      // legs (ankles above the hips). Easy ("nur Arme"): arms only, clearly lifted.
+      const T = dist(P(s.shoulder), P(s.hip), aspect);
+      const lying = tilt(P(s.shoulder), P(s.hip), aspect) < 35;
+      const forward = Math.abs(P(s.wrist).x - P(s.hip).x) > Math.abs(P(s.shoulder).x - P(s.hip).x);
+      const armsUp = P(s.wrist).y < P(s.shoulder).y - (easy ? 0.1 * T : 0) && tilt(P(s.shoulder), P(s.wrist), aspect) < 50;
+      const chestUp = easy || P(s.hip).y - P(s.shoulder).y > 0.15 * T;
+      const legsUp = easy || (P(s.ankle).y < P(s.hip).y && angle(P(s.hip), P(s.knee), P(s.ankle), aspect) > 140);
+      return { ...hold(lying && forward && armsUp && chestUp && legsUp && faceDir(pts, s) !== 'up'), view };
+    }
+    case 'sideplank': {
+      // Seen with chest or back toward the camera, the shoulders are stacked one above the other.
+      // From the head or the feet the line through the body cannot be seen; standing sideways the
+      // two shoulders overlap. `facing` does not work here (it expects level shoulders), so: both
+      // shoulders far apart in the image (> 0.25 torso lengths) = front, else side.
+      const miss = need([L.shoulder, R.shoulder, L.hip, R.hip]);
+      if (miss.length) return lost(miss);
+      const ms = mid(P(L.shoulder), P(R.shoulder));
+      const mh = mid(P(L.hip), P(R.hip));
+      const T = dist(ms, mh, aspect) || 0.0001;
+      const view: BodyView = dist(P(L.shoulder), P(R.shoulder), aspect) > 0.25 * T ? 'front' : 'side';
+      const wrong = wrongView(view, 'front');
+      if (wrong) return wrong;
+      const ends = easy ? [L.knee, R.knee] : [L.ankle, R.ankle];
+      const missEnd = need(ends);
+      if (missEnd.length) return lost(missEnd, { view });
+      const me = mid(P(ends[0]), P(ends[1]));
+      // Shoulders stacked (shoulder line steeper than 50°), body straight from shoulders to feet
+      // (knees when easy), and the body line slightly raised: 10–45° (knees: 12–55°). Lying on the
+      // side on the floor is flatter, standing is steeper.
+      const stacked = tilt(P(L.shoulder), P(R.shoulder), aspect) > 50;
+      const straight = angle(ms, mh, me, aspect) > (easy ? 150 : 155);
+      const t = tilt(ms, me, aspect);
+      const raised = easy ? t > 12 && t < 55 : t > 10 && t < 45;
+      return { ...hold(stacked && straight && raised), view };
+    }
+    case 'splitsquat': {
+      // Knee angles: head-on the bent front knee points at the camera. Side view only.
+      const view = facing(pts, aspect);
+      const wrong = wrongView(view, 'side');
+      if (wrong) return wrong;
+      const miss = need([L.hip, L.knee, L.ankle, R.hip, R.knee, R.ankle]);
+      if (miss.length) return lost(miss, { view });
+      const kl = angle(P(L.hip), P(L.knee), P(L.ankle), aspect);
+      const kr = angle(P(R.hip), P(R.knee), P(R.ankle), aspect);
+      if (easy) {
+        // Split squat, both feet on the floor: like lunges, the more bent knee counts. Only in a
+        // split stance (feet more than 0.6 shin lengths apart, about level), so lifting a knee while
+        // walking or stepping on the spot does not count.
+        const shin = Math.max(dist(P(L.knee), P(L.ankle), aspect), dist(P(R.knee), P(R.ankle), aspect));
+        const stance = Math.abs(P(L.ankle).x - P(R.ankle).x) * aspect > 0.6 * shin && Math.abs(P(L.ankle).y - P(R.ankle).y) < 0.3 * shin;
+        const a = ema(Math.min(kl, kr));
+        const next = { ...base, bodyVisible: true, smooth: a, view };
+        return stance ? hysteresis(next, a, 115, 150) : next;
+      }
+      // Bulgarian: the rear foot is up on a bench, so its knee stays bent all the time. The front
+      // leg is the one with the lower ankle; the rear ankle must be clearly raised (> 0.2 shin lengths),
+      // otherwise this is an ordinary lunge.
+      const [front, rear] = P(L.ankle).y >= P(R.ankle).y ? [L, R] : [R, L];
+      const shin = dist(P(front.knee), P(front.ankle), aspect);
+      const raised = P(rear.ankle).y < P(front.ankle).y - 0.2 * shin;
+      const a = ema(front === L ? kl : kr);
+      const next = { ...base, bodyVisible: true, smooth: a, view };
+      return raised ? hysteresis(next, a, 105, 150) : next;
+    }
+    case 'pistol': {
+      // One-leg squat. Standing leg = the one with the lower ankle; the free foot must be clearly
+      // off the floor (> 0.25 shin lengths above the other) at the bottom, so a normal squat never
+      // counts. Easy (sit down on a chair on one leg): less deep.
+      const view: BodyView = facing(pts, aspect) === 'front' ? 'front' : 'side';
+      const miss = need(FRONT_LEG_PARTS.filter((i) => view === 'front' || (i !== L.shoulder && i !== R.shoulder)));
+      if (miss.length) return lost(miss, { view });
+      const [st, free] = P(L.ankle).y >= P(R.ankle).y ? [L, R] : [R, L];
+      const shin = dist(P(st.knee), P(st.ankle), aspect) || 0.0001;
+      const lifted = P(free.ankle).y < P(st.ankle).y - 0.25 * shin;
+      if (view === 'front') {
+        // Head-on: hip height above the standing ankle as a share of the player's own standing value
+        // (as for squats, learned while the standing thigh is upright).
+        const raw = (P(st.ankle).y - avg(P(L.hip).y, P(R.hip).y)) / shoulderWidth(pts, aspect);
+        const standing = (P(st.knee).y - avg(P(L.hip).y, P(R.hip).y)) / shin > 0.85;
+        const standRef = learnStand(state.standRef, raw, standing);
+        const h = smoothIn(view, raw / (standRef ?? STAND_HIP_SW));
+        const next = { ...base, bodyVisible: true, smooth: h, view, standRef };
+        const down = easy ? 0.7 : 0.55;
+        return h < down && !lifted ? next : hysteresis(next, h, down, 0.85);
+      }
+      const a = smoothIn(view, angle(P(st.hip), P(st.knee), P(st.ankle), aspect));
+      const next = { ...base, bodyVisible: true, smooth: a, view };
+      const down = easy ? 100 : 80;
+      return a < down && !lifted ? next : hysteresis(next, a, down, 150);
+    }
+    case 'jumpsquats': {
+      if (easy) return as('squats', true); // fast half squats without the jump
+      // A rep = a squat (side: knee below 120°, front: hips below 0.8 of the standing height),
+      // then a jump: both feet clearly off the floor (mean ankle more than 0.1 leg lengths above
+      // the floor). The floor is the lowest ankle height seen; it follows higher values slowly
+      // (2 % per frame), so walking toward or away from the phone does not leave it wrong for long.
+      const view: BodyView = facing(pts, aspect) === 'front' ? 'front' : 'side';
+      const parts = view === 'front' ? FRONT_LEG_PARTS : [s.hip, s.knee, s.ankle];
+      const miss = need(parts);
+      if (miss.length) return lost(miss, { view });
+      const ankleY = view === 'front' ? avg(P(L.ankle).y, P(R.ankle).y) : P(s.ankle).y;
+      const floor = state.floor === undefined || ankleY > state.floor ? ankleY : state.floor + 0.02 * (ankleY - state.floor);
+      const leg = dist(P(s.hip), P(s.ankle), aspect);
+      const airborne = ankleY < floor - 0.1 * leg;
+      let deep: boolean;
+      let standRef = state.standRef;
+      if (view === 'front') {
+        const raw = hipOverAnkles(pts, aspect);
+        standRef = learnStand(standRef, raw, !airborne && Math.min(...thighDrops(pts, aspect)) > 0.85);
+        deep = raw / (standRef ?? STAND_HIP_SW) < 0.8;
+      } else deep = angle(P(s.hip), P(s.knee), P(s.ankle), aspect) < 120;
+      // "down" = squatted; the rep completes in the air
+      const v = pseudo(deep, airborne);
+      return hysteresis({ ...base, bodyVisible: true, smooth: v, view, floor, standRef }, v, 45, 135);
+    }
+    case 'handstand': {
+      const view = facing(pts, aspect);
+      const wrong = wrongView(view, 'side');
+      if (wrong) return wrong;
+      const miss = need([s.wrist, s.elbow, s.shoulder, s.hip, s.ankle]);
+      if (miss.length) return lost(miss, { view });
+      const T = dist(P(s.shoulder), P(s.hip), aspect);
+      const armsStraight = angle(P(s.shoulder), P(s.elbow), P(s.wrist), aspect) > 140;
+      const handsDown = P(s.wrist).y > P(s.shoulder).y;
+      if (easy) {
+        // Pike hold, feet on a chair: hips clearly above the shoulders (> 0.3 torso lengths), torso
+        // steeper than 45°, bent at the hips (< 135°), feet off the floor (above the hands).
+        const hipsUp = P(s.hip).y < P(s.shoulder).y - 0.3 * T && tilt(P(s.shoulder), P(s.hip), aspect) > 45;
+        const piked = angle(P(s.shoulder), P(s.hip), P(s.ankle), aspect) < 135;
+        const feetUp = P(s.ankle).y < P(s.wrist).y - 0.2 * T;
+        return { ...hold(armsStraight && handsDown && hipsUp && piked && feetUp), view };
+      }
+      // Upside down: hands lowest, then shoulders, hips, feet on top; body steeper than 60° and
+      // about straight (> 140°, the back may arch against the wall).
+      const inverted = P(s.hip).y < P(s.shoulder).y - 0.5 * T && P(s.ankle).y < P(s.hip).y;
+      const steep = tilt(P(s.shoulder), P(s.ankle), aspect) > 60;
+      const straight = angle(P(s.shoulder), P(s.hip), P(s.ankle), aspect) > 140;
+      return { ...hold(armsStraight && handsDown && inverted && steep && straight), view };
+    }
+    case 'lsit': {
+      const view = facing(pts, aspect);
+      const wrong = wrongView(view, 'side');
+      if (wrong) return wrong;
+      const miss = need([s.shoulder, s.elbow, s.wrist, s.hip, s.knee, s.ankle]);
+      if (miss.length) return lost(miss, { view });
+      // Torso upright (> 55°), arms straight (> 140°) with the hands beside the hips (not more than
+      // 0.25 torso lengths above them), and the feet off the floor: above the hands by more than
+      // 0.1 torso lengths (sitting on the floor with straight legs, feet and hands are level).
+      // Normal: straight legs (> 150°) about level (< 25°). Easy (tuck): knees pulled up (hip angle < 100°).
+      const T = dist(P(s.shoulder), P(s.hip), aspect);
+      const upright = tilt(P(s.shoulder), P(s.hip), aspect) > 55;
+      const arms = angle(P(s.shoulder), P(s.elbow), P(s.wrist), aspect) > 140 && P(s.wrist).y > P(s.hip).y - 0.25 * T;
+      const feetUp = P(s.ankle).y < P(s.wrist).y - 0.1 * T;
+      const legs = easy
+        ? angle(P(s.shoulder), P(s.hip), P(s.knee), aspect) < 100
+        : angle(P(s.hip), P(s.knee), P(s.ankle), aspect) > 150 && tilt(P(s.hip), P(s.ankle), aspect) < 25;
+      return { ...hold(upright && arms && feetUp && legs), view };
+    }
+    case 'calves': {
+      // The heel rises over the toes: only seen from the side.
+      const view = facing(pts, aspect);
+      const wrong = wrongView(view, 'side');
+      if (wrong) return wrong;
+      const miss = need([s.shoulder, s.hip, s.knee, s.ankle, s.heel, s.toe]);
+      if (miss.length) return lost(miss, { view });
+      // Standing upright with straight legs (squatting on the toes does not count). Lift = how far
+      // the heel is above the toes, in foot lengths: flat about 0, on the toes about 0.3–0.4.
+      const upright = tilt(P(s.shoulder), P(s.hip), aspect) > 60 && angle(P(s.hip), P(s.knee), P(s.ankle), aspect) > 150;
+      const foot = dist(P(s.heel), P(s.toe), aspect) || 0.0001;
+      const lift = smoothIn('side', (P(s.toe).y - P(s.heel).y) / foot);
+      const v = pseudo(lift > (easy ? 0.22 : 0.28), lift < 0.1);
+      const next = { ...base, bodyVisible: true, smooth: lift, view };
+      return upright ? hysteresis(next, v, 45, 135) : next;
     }
     default:
       return pts.length ? base : { ...base, bodyVisible: false, inPosition: false };

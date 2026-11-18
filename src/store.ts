@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureBattles, logDamage, settleBattles, undoDamage, type Battle } from './battle';
 import {
   addDailyQuestToDay,
+  applyAusdauerBonus,
   autoCompleteFromHealth,
   completeQuest as completeQuestIn,
   dayOutdated,
@@ -12,6 +13,7 @@ import {
   normalize,
   randomPool,
   rerollQuest,
+  setQuestVariant as setQuestVariantIn,
   setReading as setReadingIn,
   startNewSeason,
   toDateKey,
@@ -114,7 +116,8 @@ export function useGame(today: string) {
   // Functional update: it must build on the latest state, never overwrite a pending one.
   useEffect(() => {
     setState((s) => {
-      const settled = settleBattles(autoCompleteFromHealth(s, today), today);
+      // the Ausdauer-Bonus goes on open run quests first (once, see applyAusdauerBonus), then health ticks off
+      const settled = settleBattles(autoCompleteFromHealth(applyAusdauerBonus(s, today), today), today);
       // a fresh enemy steps in once the current one falls
       return settled.profile ? ensureBattles(settled, today, currentLevel(settled)) : settled;
     });
@@ -216,6 +219,19 @@ export function useGame(today: string) {
         if (!day || !s.profile) return s;
         const next = rerollQuest(day, questId, currentLevel(s), s.profile.difficulty, randomPool(s), easyOn(s), s.customQuests);
         return { ...s, days: { ...s.days, [today]: next } };
+      });
+    },
+    [today],
+  );
+
+  /** Switch one open quest of today between normal and its easier variant (less XP). */
+  const setQuestVariant = useCallback(
+    (questId: string, easy: boolean) => {
+      setState((s) => {
+        const day = s.days[today];
+        if (!day) return s;
+        const next = setQuestVariantIn(day, questId, easy, s.customQuests);
+        return next === day ? s : { ...s, days: { ...s.days, [today]: next } };
       });
     },
     [today],
@@ -329,6 +345,7 @@ export function useGame(today: string) {
     completeQuest,
     uncheckQuest,
     reroll,
+    setQuestVariant,
     updateProfile,
     addCustomQuest,
     removeCustomQuest,

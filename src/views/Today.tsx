@@ -3,6 +3,7 @@ import { currentEnemy, hpLeft } from '../battle';
 import {
   ATTR_LABEL,
   DAY_CLEAR_BONUS,
+  canSwitchVariant,
   REROLLS_PER_DAY,
   formatDate,
   bestStreak,
@@ -169,6 +170,8 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         swappable={swappable}
         proof={proofFor(q, custom).kind}
         note={questNote(state, today, q)}
+        canSwitch={!swapping && canSwitchVariant(q, custom)}
+        onSwitch={() => game.setQuestVariant(q.id, !q.easy)}
         onTap={() => {
           if (!swapping) return startProof(q);
           if (!swappable) return;
@@ -374,6 +377,11 @@ const percentOf = (q: QuestInstance) => Math.round((questAchieved(q) / q.amount)
  * XP. Done quests show the XP earned, and how much was done when it is more than asked.
  */
 function questNote(state: GameState, today: string, q: QuestInstance): string {
+  const note = questNoteBase(state, today, q);
+  return q.bonus ? `${note} · Ausdauer-Bonus +25 %` : note;
+}
+
+function questNoteBase(state: GameState, today: string, q: QuestInstance): string {
   if (q.done) {
     const xp = `+${questXp(q)} XP`;
     const got = questAchieved(q);
@@ -398,9 +406,11 @@ function QuestRow(props: {
   swappable: boolean;
   proof: ProofKind;
   note: string;
+  canSwitch: boolean;
+  onSwitch: () => void;
   onTap: () => void;
 }) {
-  const { quest: q, swapMode, swappable, proof, note, onTap } = props;
+  const { quest: q, swapMode, swappable, proof, note, canSwitch, onSwitch, onTap } = props;
   const xp = questXp(q);
   const doubled = isDoubled(q);
   const [burst, setBurst] = useState<{ key: number; xp: number } | null>(null);
@@ -454,6 +464,16 @@ function QuestRow(props: {
           </span>
         )}
       </button>
+      {canSwitch && (
+        <button
+          className="link-button"
+          style={{ fontSize: '0.8rem', padding: '0.25rem 0.4rem', marginTop: '0.2rem' }}
+          onClick={onSwitch}
+          aria-label={q.easy ? `${q.title}: normale Ausführung, volle XP` : `${q.title}: leichtere Ausführung, weniger XP`}
+        >
+          {q.easy ? 'Normal' : 'Leichter'}
+        </button>
+      )}
     </li>
   );
 }

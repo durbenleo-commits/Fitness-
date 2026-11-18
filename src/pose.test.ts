@@ -916,3 +916,342 @@ describe('view and missing parts are reported for every exercise', () => {
     }
   });
 });
+
+// ---------- calisthenics exercises ----------
+
+/** Like `both`, plus ears, heels and toes (side view: both sides on the same point). */
+const both2 = (pts: Record<string, readonly [number, number]>) => {
+  const idx: Record<string, [number, number]> = { ear: [7, 8], heel: [29, 30], toe: [31, 32] };
+  const rest: Record<string, readonly [number, number]> = {};
+  const out: Record<number, readonly [number, number]> = {};
+  for (const [k, p] of Object.entries(pts)) {
+    if (idx[k]) for (const i of idx[k]) out[i] = p;
+    else rest[k] = p;
+  }
+  return { ...both(rest), ...out };
+};
+const P2 = (pts: Record<string, readonly [number, number]>) => pose(both2(pts));
+const holdSec = (id: string, f: Point[], easy = false) => scanAmount(runEasy(id, times(f, 21), easy));
+
+describe('calisthenics: every new exercise is scannable with a spec', () => {
+  const ids = ['dips', 'pike', 'diamond', 'bridge', 'legraises', 'hollow', 'sideplank', 'superman', 'splitsquat', 'pistol', 'jumpsquats', 'handstand', 'chinups', 'kneeraises', 'lsit', 'calves'];
+  it('has setup, cue, kind and view (normal and easy)', () => {
+    for (const id of ids) {
+      expect(SCANNABLE[id], id).toBeDefined();
+      for (const easy of [false, true]) {
+        const spec = scanSpec(id, easy)!;
+        expect(spec.cue.length, id).toBeGreaterThan(10);
+        expect(['reps', 'hold'], id).toContain(spec.kind);
+      }
+      expect(SCANNABLE[id].easyCue, id).toBeDefined();
+    }
+    const holds = ids.filter((id) => SCANNABLE[id].kind === 'hold').sort();
+    expect(holds).toEqual(['handstand', 'hollow', 'lsit', 'sideplank', 'superman']);
+    expect(viewNeed('sideplank')).toBe('front');
+    expect(viewNeed('pistol')).toBe('any');
+    expect(viewNeed('chinups', true)).toBe('side');
+  });
+});
+
+describe('dips', () => {
+  const top = P2({ shoulder: [0.5, 0.3], hip: [0.5, 0.6], elbow: [0.5, 0.42], wrist: [0.5, 0.55] });
+  const bottom = P2({ shoulder: [0.5, 0.4], hip: [0.5, 0.7], elbow: [0.38, 0.41], wrist: [0.4, 0.55] }); // ~85°
+  const half = P2({ shoulder: [0.5, 0.36], hip: [0.5, 0.66], elbow: [0.42, 0.44], wrist: [0.48, 0.52] }); // ~98°
+  it('counts full dips, half dips only in easy mode', () => {
+    expect(runEasy('dips', cycle(top, bottom, 3), false).reps).toBe(3);
+    expect(runEasy('dips', cycle(top, half, 2, 5), false).reps).toBe(0);
+    expect(runEasy('dips', cycle(top, half, 2, 5), true).reps).toBe(2);
+  });
+  it('ignores curls (hands above the elbows) and push-ups (torso flat)', () => {
+    const body = { shoulder: [0.5, 0.3], hip: [0.5, 0.6], elbow: [0.5, 0.45] } as const;
+    expect(run('dips', cycle(P2({ ...body, wrist: [0.5, 0.6] }), P2({ ...body, wrist: [0.45, 0.33] }), 2)).reps).toBe(0);
+    expect(run('dips', cycle(pose({ ...plankBody, ...armsStraight }), pose({ ...plankBody, ...armsBent }), 2)).reps).toBe(0);
+  });
+});
+
+describe('pike push-ups', () => {
+  const pike = { hip: [0.5, 0.35], ankle: [0.7, 0.85] } as const;
+  const up = P2({ ...pike, shoulder: [0.35, 0.6], elbow: [0.325, 0.725], wrist: [0.3, 0.85] });
+  const down = P2({ ...pike, shoulder: [0.32, 0.75], elbow: [0.4, 0.78], wrist: [0.3, 0.85] });
+  it('counts with the hips high', () => {
+    expect(run('pike', cycle(up, down, 3)).reps).toBe(3);
+  });
+  it('ignores normal push-ups; a flat pike counts only in easy mode', () => {
+    expect(run('pike', cycle(pose({ ...plankBody, ...armsStraight }), pose({ ...plankBody, ...armsBent }), 2)).reps).toBe(0);
+    const flat = { hip: [0.55, 0.52], ankle: [0.85, 0.7] } as const; // hip angle ~131° at the top
+    const fUp = P2({ ...flat, shoulder: [0.3, 0.6], elbow: [0.3, 0.72], wrist: [0.3, 0.84] });
+    const fDown = P2({ ...flat, shoulder: [0.3, 0.75], elbow: [0.38, 0.78], wrist: [0.3, 0.85] });
+    expect(runEasy('pike', cycle(fUp, fDown, 2), false).reps).toBe(0);
+    expect(runEasy('pike', cycle(fUp, fDown, 2), true).reps).toBe(2);
+  });
+});
+
+describe('diamond push-ups', () => {
+  const cam = 10;
+  const vis = { hip: 0.4 };
+  const up = { nose: [0, 52, 130], shoulder: [18, 58, 150], elbow: [20, 30, 150], wrist: [22, 3, 150], hip: [13, 40, 198] } as const;
+  const down = { nose: [0, 12, 125], shoulder: [18, 15, 145], elbow: [32, 18, 160], wrist: [22, 3, 150], hip: [13, 12, 195] } as const;
+  const narrow = (b: typeof up | typeof down) => ({ ...b, wrist: [4, 3, 150] }) as const;
+  it('head-on: count only with the hands close together', () => {
+    const s = run('diamond', cycle(project(narrow(up), cam, vis), project(narrow(down), cam, vis), 2));
+    expect(s).toMatchObject({ reps: 2, view: 'front' });
+    expect(run('diamond', cycle(project(up, cam, vis), project(down, cam, vis), 2)).reps).toBe(0);
+    expect(run('pushups', cycle(project(up, cam, vis), project(down, cam, vis), 2)).reps).toBe(2);
+  });
+  it('from the side: count like push-ups, knees allowed', () => {
+    expect(run('diamond', cycle(pose({ ...plankBody, ...armsStraight }), pose({ ...plankBody, ...armsBent }), 2)).reps).toBe(2);
+  });
+});
+
+describe('glute bridge', () => {
+  const legs = { shoulder: [0.2, 0.8], knee: [0.65, 0.6], ankle: [0.75, 0.8] } as const;
+  const lowered = P2({ ...legs, hip: [0.45, 0.8] }); // 135°
+  const bridged = P2({ ...legs, hip: [0.45, 0.69] }); // ~180°
+  const half = P2({ ...legs, hip: [0.45, 0.74] }); // ~158°
+  it('counts lifting and lowering the hips, half height only in easy mode', () => {
+    expect(run('bridge', cycle(lowered, bridged, 3)).reps).toBe(3);
+    expect(runEasy('bridge', cycle(lowered, half, 2, 5), false).reps).toBe(0);
+    expect(runEasy('bridge', cycle(lowered, half, 2, 5), true).reps).toBe(2);
+  });
+  it('ignores bowing while standing', () => {
+    const stand = P2({ shoulder: [0.5, 0.2], hip: [0.5, 0.5], knee: [0.5, 0.7], ankle: [0.5, 0.9] });
+    const bow = P2({ shoulder: [0.3, 0.6], hip: [0.5, 0.5], knee: [0.5, 0.7], ankle: [0.5, 0.9] });
+    expect(runEasy('bridge', cycle(bow, stand, 2), true).reps).toBe(0);
+  });
+});
+
+describe('leg raises and knee raises', () => {
+  const torso = { shoulder: [0.2, 0.8], hip: [0.5, 0.8] } as const;
+  const down = P2({ ...torso, knee: [0.65, 0.8], ankle: [0.8, 0.8] });
+  const up = P2({ ...torso, knee: [0.5, 0.65], ankle: [0.5, 0.5] });
+  const bentDown = P2({ ...torso, knee: [0.65, 0.72], ankle: [0.8, 0.8] });
+  const bentUp = P2({ ...torso, knee: [0.52, 0.62], ankle: [0.65, 0.6] });
+  it('count straight legs to vertical; bent knees only in easy mode', () => {
+    expect(run('legraises', cycle(down, up, 3)).reps).toBe(3);
+    expect(runEasy('legraises', cycle(bentDown, bentUp, 2), false).reps).toBe(0);
+    expect(runEasy('legraises', cycle(bentDown, bentUp, 2), true).reps).toBe(2);
+  });
+  it('need the torso flat on the floor', () => {
+    const stand = P2({ shoulder: [0.5, 0.2], hip: [0.5, 0.5], knee: [0.5, 0.7], ankle: [0.5, 0.9] });
+    const kneeUp = P2({ shoulder: [0.5, 0.2], hip: [0.5, 0.5], knee: [0.65, 0.45], ankle: [0.65, 0.65] });
+    expect(runEasy('legraises', cycle(stand, kneeUp, 2), true).reps).toBe(0);
+  });
+  it('hanging knee raises: both knees up while hanging; easy = lying knee raises', () => {
+    const body = { wrist: [0.5, 0.1], shoulder: [0.5, 0.25], hip: [0.5, 0.55] } as const;
+    const hang = P2({ ...body, knee: [0.5, 0.75], ankle: [0.5, 0.95] });
+    const raised = P2({ ...body, knee: [0.65, 0.5], ankle: [0.6, 0.7] });
+    expect(run('kneeraises', cycle(hang, raised, 3)).reps).toBe(3);
+    const oneKnee = pose({ ...both2({ ...body, ankle: [0.5, 0.95] }), 25: [0.65, 0.5], 26: [0.5, 0.75] });
+    expect(run('kneeraises', cycle(hang, oneKnee, 2)).reps).toBe(0);
+    const notHanging = { wrist: [0.5, 0.7], shoulder: [0.5, 0.25], hip: [0.5, 0.55] } as const;
+    expect(run('kneeraises', cycle(P2({ ...notHanging, knee: [0.5, 0.75], ankle: [0.5, 0.95] }), P2({ ...notHanging, knee: [0.65, 0.5], ankle: [0.6, 0.7] }), 2)).reps).toBe(0);
+    expect(runEasy('kneeraises', cycle(bentDown, bentUp, 2), true).reps).toBe(2);
+    expect(runEasy('kneeraises', cycle(bentDown, bentUp, 2), true).exerciseId).toBe('kneeraises');
+  });
+});
+
+describe('hollow hold', () => {
+  const good = P2({ hip: [0.5, 0.8], shoulder: [0.25, 0.72], knee: [0.65, 0.76], ankle: [0.8, 0.72] });
+  const tucked = P2({ hip: [0.5, 0.8], shoulder: [0.25, 0.72], knee: [0.6, 0.68], ankle: [0.72, 0.72] });
+  it('times only with shoulders and straight legs lifted', () => {
+    expect(holdSec('hollow', good)).toBe(2);
+    expect(holdSec('hollow', P2({ hip: [0.5, 0.8], shoulder: [0.25, 0.8], knee: [0.65, 0.76], ankle: [0.8, 0.72] }))).toBe(0); // shoulders down
+    expect(holdSec('hollow', P2({ hip: [0.5, 0.8], shoulder: [0.25, 0.72], knee: [0.65, 0.8], ankle: [0.8, 0.8] }))).toBe(0); // legs down
+  });
+  it('accepts bent knees only in easy mode', () => {
+    expect(holdSec('hollow', tucked)).toBe(0);
+    expect(holdSec('hollow', tucked, true)).toBe(2);
+  });
+  it('does not take a face-down pose (superman) as hollow hold', () => {
+    const faceDown = pose({ ...both2({ hip: [0.5, 0.8], shoulder: [0.25, 0.72], knee: [0.65, 0.76], ankle: [0.8, 0.72], ear: [0.24, 0.68] }), 0: [0.2, 0.71] });
+    expect(holdSec('hollow', faceDown)).toBe(0);
+  });
+});
+
+describe('superman', () => {
+  const head = { ear: [0.28, 0.72] } as const;
+  const good = pose({ ...both2({ ...head, hip: [0.5, 0.8], shoulder: [0.3, 0.74], wrist: [0.12, 0.7], knee: [0.65, 0.79], ankle: [0.8, 0.77] }), 0: [0.25, 0.74] });
+  const armsOnly = pose({ ...both2({ ...head, hip: [0.5, 0.8], shoulder: [0.3, 0.78], wrist: [0.12, 0.72], knee: [0.65, 0.81], ankle: [0.8, 0.82] }), 0: [0.25, 0.76] });
+  it('times arms, chest and legs lifted; arms only in easy mode', () => {
+    expect(holdSec('superman', good)).toBe(2);
+    expect(holdSec('superman', armsOnly)).toBe(0);
+    expect(holdSec('superman', armsOnly, true)).toBe(2);
+  });
+  it('ignores lying with the arms beside the body, and lying face up', () => {
+    expect(holdSec('superman', P2({ hip: [0.5, 0.8], shoulder: [0.3, 0.74], wrist: [0.5, 0.8], knee: [0.65, 0.79], ankle: [0.8, 0.77] }), true)).toBe(0);
+    const faceUp = pose({ ...both2({ hip: [0.5, 0.8], shoulder: [0.3, 0.74], wrist: [0.12, 0.7], knee: [0.65, 0.79], ankle: [0.8, 0.77], ear: [0.28, 0.74] }), 0: [0.26, 0.69] });
+    expect(holdSec('superman', faceUp)).toBe(0);
+  });
+});
+
+describe('side plank (seen from the front)', () => {
+  const sh = { 11: [0.25, 0.55], 12: [0.25, 0.65] } as const;
+  const good = pose({ ...sh, 23: [0.5, 0.65], 24: [0.5, 0.71], 25: [0.64, 0.72], 26: [0.64, 0.78], 27: [0.78, 0.78], 28: [0.78, 0.82] });
+  const sagging = pose({ ...sh, 23: [0.5, 0.77], 24: [0.5, 0.83], 25: [0.64, 0.8], 26: [0.64, 0.84], 27: [0.78, 0.78], 28: [0.78, 0.82] });
+  const knees = pose({ ...sh, 23: [0.45, 0.66], 24: [0.45, 0.72], 25: [0.65, 0.76], 26: [0.65, 0.8], 27: [0.45, 0.82], 28: [0.45, 0.86] });
+  it('times only a straight, raised body', () => {
+    expect(holdSec('sideplank', good)).toBe(2);
+    expect(runEasy('sideplank', times(good, 3), false).view).toBe('front');
+    expect(holdSec('sideplank', sagging)).toBe(0);
+  });
+  it('accepts the knee version only in easy mode', () => {
+    expect(holdSec('sideplank', knees)).toBe(0);
+    expect(holdSec('sideplank', knees, true)).toBe(2);
+  });
+  it('ignores standing facing the camera and asks to face the camera from the side', () => {
+    const stand = pose({ 11: [0.42, 0.3], 12: [0.58, 0.3], 23: [0.46, 0.55], 24: [0.54, 0.55], 27: [0.46, 0.9], 28: [0.54, 0.9], 25: [0.46, 0.72], 26: [0.54, 0.72] });
+    expect(holdSec('sideplank', stand)).toBe(0);
+    const s = runEasy('sideplank', times(pose(both({ shoulder: [0.25, 0.6], hip: [0.5, 0.68], knee: [0.64, 0.74], ankle: [0.78, 0.8] })), 5), false);
+    expect(s).toMatchObject({ holdMs: 0, wrongView: 'front' });
+  });
+});
+
+describe('Bulgarian split squats', () => {
+  const top = pose({ 23: [0.5, 0.5], 24: [0.5, 0.5], 25: [0.55, 0.7], 27: [0.55, 0.9], 26: [0.35, 0.62], 28: [0.25, 0.7] });
+  const bottom = pose({ 23: [0.45, 0.68], 24: [0.45, 0.68], 25: [0.62, 0.7], 27: [0.55, 0.9], 26: [0.3, 0.82], 28: [0.25, 0.7] });
+  const floorTop = pose({ 23: [0.5, 0.5], 24: [0.5, 0.5], 25: [0.55, 0.7], 27: [0.55, 0.9], 26: [0.42, 0.7], 28: [0.3, 0.9] });
+  const floorBottom = pose({ 23: [0.45, 0.68], 24: [0.45, 0.68], 25: [0.62, 0.7], 27: [0.55, 0.9], 26: [0.38, 0.86], 28: [0.25, 0.9] });
+  it('count the front knee with the rear foot up', () => {
+    expect(run('splitsquat', cycle(top, bottom, 3)).reps).toBe(3);
+  });
+  it('need the rear foot raised; split squats with both feet down count only in easy mode', () => {
+    expect(runEasy('splitsquat', cycle(floorTop, floorBottom, 2), false).reps).toBe(0);
+    expect(runEasy('splitsquat', cycle(floorTop, floorBottom, 2), true).reps).toBe(2);
+  });
+});
+
+describe('pistol squats', () => {
+  const top = pose({ 23: [0.5, 0.5], 24: [0.5, 0.5], 25: [0.5, 0.7], 27: [0.5, 0.9], 26: [0.55, 0.7], 28: [0.6, 0.85] });
+  const bottom = pose({ 23: [0.4, 0.82], 24: [0.4, 0.82], 25: [0.55, 0.72], 27: [0.5, 0.9], 26: [0.6, 0.8], 28: [0.8, 0.78] }); // ~41°
+  const chair = pose({ 23: [0.32, 0.7], 24: [0.32, 0.7], 25: [0.5, 0.7], 27: [0.5, 0.9], 26: [0.5, 0.72], 28: [0.7, 0.72] }); // 90°
+  const squatDeep = pose({ 23: [0.4, 0.82], 24: [0.4, 0.82], 25: [0.55, 0.72], 27: [0.5, 0.9], 26: [0.55, 0.72], 28: [0.5, 0.9] });
+  it('count one-leg squats from the side; a chair-depth one only in easy mode', () => {
+    expect(run('pistol', cycle(top, bottom, 3)).reps).toBe(3);
+    expect(runEasy('pistol', cycle(top, chair, 2), false).reps).toBe(0);
+    expect(runEasy('pistol', cycle(top, chair, 2), true).reps).toBe(2);
+  });
+  it('ignore deep squats on both legs', () => {
+    expect(runEasy('pistol', cycle(top, squatDeep, 3), true).reps).toBe(0);
+  });
+  it('count from the front (hip drop over the standing foot)', () => {
+    const shoulders = (y: number) => ({ 0: [0.5, y - 0.1], 11: [0.42, y], 12: [0.58, y] }) as const;
+    const fTop = pose({ ...shoulders(0.3), 23: [0.47, 0.55], 24: [0.53, 0.55], 25: [0.47, 0.72], 26: [0.53, 0.72], 27: [0.47, 0.9], 28: [0.53, 0.9] });
+    const fBottom = pose({ ...shoulders(0.5), 23: [0.47, 0.78], 24: [0.53, 0.78], 25: [0.47, 0.75], 26: [0.53, 0.74], 27: [0.47, 0.9], 28: [0.53, 0.7] });
+    const fSquat = pose({ ...shoulders(0.5), 23: [0.47, 0.78], 24: [0.53, 0.78], 25: [0.45, 0.75], 26: [0.55, 0.75], 27: [0.47, 0.9], 28: [0.53, 0.9] });
+    expect(run('pistol', cycle(fTop, fBottom, 3))).toMatchObject({ reps: 3, view: 'front' });
+    expect(run('pistol', cycle(fTop, fSquat, 3)).reps).toBe(0);
+  });
+});
+
+describe('jump squats', () => {
+  const stand = pose(both({ hip: [0.5, 0.5], knee: [0.5, 0.7], ankle: [0.5, 0.9] }));
+  const deep = pose(both({ hip: [0.3, 0.7], knee: [0.5, 0.7], ankle: [0.5, 0.9] }));
+  const air = pose(both({ hip: [0.5, 0.4], knee: [0.5, 0.6], ankle: [0.5, 0.8] }));
+  const rep = [...times(deep, 4), ...times(air, 2), ...times(stand, 4)];
+  it('count a squat followed by a jump', () => {
+    expect(run('jumpsquats', [...times(stand, 4), ...rep, ...rep, ...rep]).reps).toBe(3);
+  });
+  it('ignore squats without a jump and jumps without a squat', () => {
+    expect(run('jumpsquats', cycle(stand, deep, 3)).reps).toBe(0);
+    expect(run('jumpsquats', cycle(stand, air, 3, 2)).reps).toBe(0);
+  });
+  it('easy mode counts fast half squats without a jump', () => {
+    const half = pose(both({ hip: [0.327, 0.6], knee: [0.5, 0.7], ankle: [0.5, 0.9] }));
+    expect(runEasy('jumpsquats', cycle(stand, half, 3), true)).toMatchObject({ reps: 3, exerciseId: 'jumpsquats' });
+  });
+});
+
+describe('handstand', () => {
+  const hs = P2({ wrist: [0.5, 0.9], elbow: [0.5, 0.8], shoulder: [0.5, 0.7], hip: [0.52, 0.45], ankle: [0.54, 0.15] });
+  const pikeHold = P2({ wrist: [0.3, 0.9], elbow: [0.3, 0.8], shoulder: [0.3, 0.7], hip: [0.45, 0.4], ankle: [0.8, 0.6] });
+  const standArmsUp = P2({ wrist: [0.5, 0.05], elbow: [0.5, 0.15], shoulder: [0.5, 0.3], hip: [0.5, 0.55], ankle: [0.5, 0.9] });
+  it('times an upside-down straight body only', () => {
+    expect(holdSec('handstand', hs)).toBe(2);
+    expect(holdSec('handstand', standArmsUp)).toBe(0);
+    expect(holdSec('handstand', pikeHold)).toBe(0);
+  });
+  it('easy: pike hold with the feet raised', () => {
+    expect(holdSec('handstand', pikeHold, true)).toBe(2);
+    expect(holdSec('handstand', standArmsUp, true)).toBe(0);
+    // feet on the floor (normal downward dog) is not enough
+    expect(holdSec('handstand', P2({ wrist: [0.3, 0.9], elbow: [0.3, 0.8], shoulder: [0.3, 0.7], hip: [0.45, 0.4], ankle: [0.7, 0.9] }), true)).toBe(0);
+  });
+});
+
+describe('chin-ups', () => {
+  it('count like pull-ups, and like Australian pull-ups in easy mode', () => {
+    expectReps(film('chinups', reps((t) => pullup(t, 16), 3), [...FRONT, ...SIDE]), 3);
+    expectReps(film('chinups', reps((t) => pullup(0.6 * t, 16), 3), [...FRONT, ...SIDE]), 0);
+    const ext = pose(both({ shoulder: [0.4, 0.6], elbow: [0.4, 0.45], wrist: [0.4, 0.3] }));
+    const pull = pose(both({ shoulder: [0.4, 0.6], elbow: [0.28, 0.6], wrist: [0.38, 0.52] }));
+    expect(runEasy('chinups', cycle(ext, pull, 2), true)).toMatchObject({ reps: 2, exerciseId: 'chinups' });
+  });
+});
+
+describe('L-sit', () => {
+  const arms = { shoulder: [0.4, 0.4], elbow: [0.415, 0.575], wrist: [0.43, 0.75] } as const;
+  const lsit = P2({ ...arms, hip: [0.42, 0.7], knee: [0.6, 0.69], ankle: [0.78, 0.68] });
+  const tuck = P2({ ...arms, hip: [0.42, 0.7], knee: [0.55, 0.6], ankle: [0.6, 0.68] });
+  const sitting = P2({ ...arms, hip: [0.42, 0.75], knee: [0.6, 0.75], ankle: [0.78, 0.75] });
+  it('times straight legs off the floor; tuck only in easy mode', () => {
+    expect(holdSec('lsit', lsit)).toBe(2);
+    expect(holdSec('lsit', tuck)).toBe(0);
+    expect(holdSec('lsit', tuck, true)).toBe(2);
+  });
+  it('ignores sitting on the floor with straight legs', () => {
+    expect(holdSec('lsit', sitting)).toBe(0);
+    expect(holdSec('lsit', sitting, true)).toBe(0);
+  });
+});
+
+describe('calf raises', () => {
+  const body = { shoulder: [0.5, 0.3], hip: [0.5, 0.55], knee: [0.5, 0.72] } as const;
+  const flat = P2({ ...body, ankle: [0.5, 0.88], heel: [0.47, 0.92], toe: [0.6, 0.92] });
+  const raised = P2({ ...body, ankle: [0.5, 0.85], heel: [0.48, 0.875], toe: [0.6, 0.92] });
+  const small = P2({ ...body, ankle: [0.5, 0.86], heel: [0.48, 0.89], toe: [0.6, 0.92] });
+  it('count heel raises, small ones only in easy mode', () => {
+    expect(run('calves', cycle(flat, raised, 3, 5)).reps).toBe(3);
+    expect(runEasy('calves', cycle(flat, small, 2, 5), false).reps).toBe(0);
+    expect(runEasy('calves', cycle(flat, small, 2, 5), true).reps).toBe(2);
+  });
+  it('need straight legs and visible feet', () => {
+    const crouch = { shoulder: [0.45, 0.45], hip: [0.35, 0.7], knee: [0.55, 0.72] } as const;
+    expect(run('calves', cycle(P2({ ...crouch, ankle: [0.5, 0.88], heel: [0.47, 0.92], toe: [0.6, 0.92] }), P2({ ...crouch, ankle: [0.5, 0.85], heel: [0.48, 0.875], toe: [0.6, 0.92] }), 2)).reps).toBe(0);
+    const noFeet = flat.map((p, i) => (i >= 29 ? { ...p, visibility: 0.1 } : p));
+    expect(step(initialScan('calves'), noFeet, 0)).toMatchObject({ bodyVisible: false, missing: ['Füße'] });
+  });
+});
+
+describe('gentle stretch routine (easy)', () => {
+  const legs = { 23: [0.53, 0.55], 24: [0.47, 0.55], 25: [0.53, 0.72], 26: [0.47, 0.72], 27: [0.53, 0.9], 28: [0.47, 0.9] } as const;
+  it('accepts a shallower forward fold and lunge stretch only in easy mode', () => {
+    const fold = pose({ ...legs, 15: [0.53, 0.66], 16: [0.47, 0.66] }); // hands at mid-thigh
+    expect(STRETCH_POSES[0].check(fold, 1)).toBe(false);
+    expect(STRETCH_POSES[0].check(fold, 1, true)).toBe(true);
+    // front knee ~130°, back leg ~145°
+    const lunge = pose({ 23: [0.5, 0.5], 24: [0.5, 0.5], 25: [0.65, 0.66], 27: [0.62, 0.9], 26: [0.4, 0.7], 28: [0.27, 0.88] });
+    expect(STRETCH_POSES[4].check(lunge, 1)).toBe(false);
+    expect(STRETCH_POSES[4].check(lunge, 1, true)).toBe(true);
+    expect(STRETCH_POSES.filter((p) => p.easyHint).length).toBe(STRETCH_POSES.length);
+  });
+  it('keeps 30 s per pose in easy mode', () => {
+    const fold = pose({ ...legs, 15: [0.53, 0.66], 16: [0.47, 0.66] });
+    let s = initialScan(STRETCH);
+    for (let i = 0; i <= 301; i++) s = step(s, fold, i * 100, 1, true);
+    expect(s.poseIndex).toBe(1);
+    expect(STRETCH_POSE_MS).toBe(30_000);
+  });
+});
+
+describe('calisthenics: standing around never counts', () => {
+  it('counts no reps and no hold time while fidgeting, from the front and the side', () => {
+    for (const id of ['dips', 'pike', 'diamond', 'bridge', 'legraises', 'splitsquat', 'pistol', 'jumpsquats', 'kneeraises', 'calves', 'hollow', 'sideplank', 'superman', 'handstand', 'lsit']) {
+      for (const easy of [false, true]) {
+        for (const { s, at } of film(id, fidgeting, [...FRONT, 45, ...SIDE], easy)) {
+          expect(s.reps, `${at} easy ${easy}`).toBe(0);
+          expect(s.holdMs, `${at} easy ${easy}`).toBe(0);
+        }
+      }
+    }
+  });
+});

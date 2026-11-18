@@ -118,6 +118,23 @@ export const QUEST_POOL: QuestTemplate[] = [
   { id: 'swim', title: 'Schwimmen', icon: '🏊', attr: 'ausdauer', base: 20, step: 5, unit: 'Min.', xp: 45, requires: ['pool'] },
   { id: 'gym', title: 'Gerätetraining', icon: '🏢', attr: 'staerke', base: 30, step: 5, unit: 'Min.', xp: 50, requires: ['gym'], noLevelScale: true },
   { id: 'bandstretch', title: 'Dehnen mit Band', icon: '🧘', attr: 'beweglichkeit', base: 8, step: 1, unit: 'Min.', xp: 25, requires: ['band'] },
+  // Calisthenics: body weight only (chin-ups and hanging knee raises need a bar)
+  { id: 'dips', title: 'Dips', icon: '💺', attr: 'staerke', base: 10, step: 1, unit: 'Wdh.', xp: 35 },
+  { id: 'pike', title: 'Pike-Liegestütze', icon: '🔺', attr: 'staerke', base: 8, step: 1, unit: 'Wdh.', xp: 35 },
+  { id: 'diamond', title: 'Diamant-Liegestütze', icon: '💎', attr: 'staerke', base: 8, step: 1, unit: 'Wdh.', xp: 35 },
+  { id: 'bridge', title: 'Beckenheben', icon: '🌉', attr: 'staerke', base: 15, step: 1, unit: 'Wdh.', xp: 25 },
+  { id: 'legraises', title: 'Beinheben liegend', icon: '🦿', attr: 'staerke', base: 12, step: 1, unit: 'Wdh.', xp: 30 },
+  { id: 'hollow', title: 'Hollow Hold', icon: '🥣', attr: 'staerke', base: 20, step: 5, unit: 'Sek.', xp: 30 },
+  { id: 'sideplank', title: 'Seitstütz', icon: '📐', attr: 'ausdauer', base: 30, step: 5, unit: 'Sek.', xp: 30 },
+  { id: 'superman', title: 'Superman', icon: '🦸', attr: 'staerke', base: 30, step: 5, unit: 'Sek.', xp: 25 },
+  { id: 'splitsquat', title: 'Bulgarische Kniebeugen', icon: '🪑', attr: 'staerke', base: 8, step: 1, unit: 'pro Bein', xp: 40 },
+  { id: 'pistol', title: 'Pistol Squats', icon: '🎯', attr: 'staerke', base: 3, step: 1, unit: 'pro Bein', xp: 50 },
+  { id: 'jumpsquats', title: 'Sprungkniebeugen', icon: '🦘', attr: 'ausdauer', base: 15, step: 1, unit: 'Wdh.', xp: 35, jump: true },
+  { id: 'handstand', title: 'Handstand an der Wand', icon: '🤸', attr: 'staerke', base: 20, step: 5, unit: 'Sek.', xp: 45 },
+  { id: 'chinups', title: 'Chin-ups', icon: '🧗', attr: 'staerke', base: 4, step: 1, unit: 'Wdh.', xp: 40, requires: ['bar'] },
+  { id: 'kneeraises', title: 'Hängendes Knieheben', icon: '🪝', attr: 'staerke', base: 8, step: 1, unit: 'Wdh.', xp: 40, requires: ['bar'] },
+  { id: 'lsit', title: 'L-Sitz', icon: '🔲', attr: 'staerke', base: 15, step: 5, unit: 'Sek.', xp: 45 },
+  { id: 'calves', title: 'Wadenheben', icon: '🦶', attr: 'staerke', base: 20, step: 1, unit: 'Wdh.', xp: 20 },
   // Fixed like the step goal, but only while reading is switched on (Profile.reading). Proven by logging pages with a photo.
   { id: 'read', title: 'Lesen', icon: '📖', attr: 'intelligenz', base: 10, step: 1, unit: 'Seiten', xp: 30, noLevelScale: true, fixed: true },
 ];
@@ -139,12 +156,16 @@ export interface QuestInstance {
   unit: string;
   xp: number;
   done: boolean;
-  easy?: boolean; // easier variant (title from VARIANTS); missing = normal
+  easy?: boolean; // easier variant (title from VARIANTS, xp × EASY_XP_FACTOR when made); missing = normal
+  bonus?: boolean; // Ausdauer-Bonus already added to xp (see applyAusdauerBonus); missing = no bonus
   extra?: boolean; // rotating optional quest ("Extra"); missing = required ("Pflicht")
   achieved?: number; // amount actually done, in the quest's unit, up to 2× amount; missing = amount when done, 0 when not
 }
 
-/** German titles of the easier variants. Amount and XP stay the same. */
+/**
+ * German titles of the easier variants. The amount stays the same; the XP is
+ * EASY_XP_FACTOR of the normal XP. Steps, reading and the retired walk have none (amounts, not movements).
+ */
 export const VARIANTS: Record<string, string> = {
   pushups: 'Knie-Liegestütze',
   squats: 'Halbe Kniebeugen',
@@ -156,9 +177,63 @@ export const VARIANTS: Record<string, string> = {
   plank: 'Unterarmstütz auf den Knien',
   wallsit: 'Wandsitzen höher',
   situps: 'Halbe Bauchpressen',
+  run: 'Laufen und Gehen im Wechsel',
+  stairs: 'Treppen langsam steigen',
+  stretch: 'Dehnen sanft',
+  mobility: 'Mobilisation sanft',
+  hips: 'Hüftöffner sanft',
+  curls: 'Bizepsbeugen mit leichter Hantel',
+  press: 'Schulterdrücken mit leichter Hantel',
+  rows: 'Rudern mit leichtem Band',
+  swings: 'Kugelhantel-Schwünge leicht',
+  rope: 'Seilspringen locker',
+  bike: 'Radfahren locker',
+  swim: 'Schwimmen mit Pausen',
+  gym: 'Gerätetraining leicht',
+  bandstretch: 'Dehnen mit Band sanft',
+  dips: 'Dips mit Füßen nah',
+  pike: 'Pike-Liegestütze flach',
+  diamond: 'Diamant-Liegestütze auf den Knien',
+  bridge: 'Beckenheben halbe Höhe',
+  legraises: 'Beinheben mit gebeugten Knien',
+  hollow: 'Hollow Hold mit gebeugten Knien',
+  sideplank: 'Seitstütz auf den Knien',
+  superman: 'Superman nur Arme',
+  splitsquat: 'Split-Kniebeugen',
+  pistol: 'Pistol Squats auf einen Stuhl',
+  jumpsquats: 'Schnelle Kniebeugen ohne Sprung',
+  handstand: 'Pike-Halten mit Füßen erhöht',
+  chinups: 'Australische Chin-ups',
+  kneeraises: 'Knieheben liegend',
+  lsit: 'Tuck-Sitz',
+  calves: 'Wadenheben mit Halt an der Wand',
 };
 
 export const hasVariant = (templateId: string | undefined) => !!templateId && templateId in VARIANTS;
+
+/** Easier variants give this share of the normal XP (rounded to whole XP). */
+export const EASY_XP_FACTOR = 0.7;
+
+/** XP of the easier variant for a normal XP value. */
+export const easyXp = (xp: number) => Math.max(1, Math.round(xp * EASY_XP_FACTOR));
+
+/** From this Ausdauer value on, run quests give AUSDAUER_BONUS_FACTOR × XP ("Ausdauer-Bonus"). */
+export const AUSDAUER_BONUS_FROM = 25;
+export const AUSDAUER_BONUS_FACTOR = 1.25;
+/** Built-in exercises that get the Ausdauer-Bonus. */
+export const AUSDAUER_BONUS_QUESTS: readonly string[] = ['run'];
+
+/** XP with the Ausdauer-Bonus added. */
+export const bonusXp = (xp: number) => Math.round(xp * AUSDAUER_BONUS_FACTOR);
+
+/** Whether an Ausdauer value unlocks the bonus. */
+export const ausdauerBonusOn = (ausdauer: number) => ausdauer >= AUSDAUER_BONUS_FROM;
+
+/** XP of a fresh quest of template `t`: easy variant first (×0.7, rounded), then the bonus (×1.25, rounded). */
+export function templateXp(t: Pick<QuestTemplate, 'xp'>, easy = false, bonus = false): number {
+  const base = easy ? easyXp(t.xp) : t.xp;
+  return bonus ? bonusXp(base) : base;
+}
 
 export interface DayLog {
   date: string; // YYYY-MM-DD, local time
@@ -381,7 +456,7 @@ function instantiate(
     attr: t.attr,
     amount: scaledAmount(t, level, difficulty),
     unit: t.unit,
-    xp: t.xp,
+    xp: templateXp(t, !!variant),
     done: false,
     ...(variant ? { easy: true } : {}),
     ...(extra ? { extra: true } : {}),
@@ -502,6 +577,67 @@ export function rerollQuest(
   const quests = [...day.quests];
   quests[idx] = { ...instantiate(t, level, difficulty, idx, easy, !!current.extra), id: `${t.id}-${idx}-r${day.rerollsUsed + 1}` };
   return { ...day, quests, rerollsUsed: day.rerollsUsed + 1 };
+}
+
+// ---------- easier variant per quest ----------
+
+/**
+ * Whether the player may switch this quest between normal and easy: a built-in exercise with a
+ * variant that is still open and has nothing achieved yet.
+ */
+export function canSwitchVariant(q: QuestInstance, customQuests: QuestTemplate[] = []): boolean {
+  if (q.done || (q.achieved ?? 0) > 0) return false;
+  if (customQuests.some((t) => t.id === q.templateId)) return false;
+  return hasVariant(q.templateId) && QUEST_POOL.some((t) => t.id === q.templateId);
+}
+
+/**
+ * Switch one open quest to its easier variant (`easy` true) or back to normal. Title and XP follow
+ * (easy = EASY_XP_FACTOR, an Ausdauer-Bonus already on the quest stays); the amount stays. Done
+ * quests, quests with something achieved and quests without a variant stay unchanged.
+ */
+export function setQuestVariant(day: DayLog, questId: string, easy: boolean, customQuests: QuestTemplate[] = []): DayLog {
+  const q = day.quests.find((x) => x.id === questId);
+  if (!q || !!q.easy === easy || !canSwitchVariant(q, customQuests)) return day;
+  const t = QUEST_POOL.find((x) => x.id === q.templateId)!;
+  const { easy: _drop, ...rest } = q;
+  const next: QuestInstance = {
+    ...rest,
+    title: easy ? VARIANTS[t.id] : t.title,
+    xp: templateXp(t, easy, !!q.bonus),
+    ...(easy ? { easy: true } : {}),
+  };
+  return { ...day, quests: day.quests.map((x) => (x.id === questId ? next : x)) };
+}
+
+// ---------- Ausdauer-Bonus ----------
+
+/** Whether this quest can get the Ausdauer-Bonus (built-in run quests). */
+export const bonusQuest = (q: Pick<QuestInstance, 'templateId'>, customQuests: QuestTemplate[] = []) =>
+  AUSDAUER_BONUS_QUESTS.includes(q.templateId) && !customQuests.some((t) => t.id === q.templateId);
+
+/**
+ * Add the Ausdauer-Bonus to a day's open run quests once the player has AUSDAUER_BONUS_FROM
+ * Ausdauer. The `bonus` flag makes it apply only once (no double bonus on reload); done quests and
+ * past days keep their XP. Returns the same day when nothing changes.
+ */
+export function applyAusdauerBonusToDay(day: DayLog, ausdauer: number, customQuests: QuestTemplate[] = []): DayLog {
+  if (!ausdauerBonusOn(ausdauer)) return day;
+  let changed = false;
+  const quests = day.quests.map((q) => {
+    if (q.done || q.bonus || !bonusQuest(q, customQuests)) return q;
+    changed = true;
+    return { ...q, xp: bonusXp(q.xp), bonus: true };
+  });
+  return changed ? { ...day, quests } : day;
+}
+
+/** applyAusdauerBonusToDay for `today`, with the player's current Ausdauer. Same state when nothing changes. */
+export function applyAusdauerBonus(state: GameState, today: string): GameState {
+  const day = state.days[today];
+  if (!day || !day.quests.some((q) => !q.done && !q.bonus && bonusQuest(q, state.customQuests))) return state;
+  const next = applyAusdauerBonusToDay(day, attributes(state).ausdauer, state.customQuests);
+  return next === day ? state : { ...state, days: { ...state.days, [today]: next } };
 }
 
 // ---------- doing more than asked ----------

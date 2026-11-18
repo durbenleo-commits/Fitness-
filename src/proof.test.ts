@@ -176,13 +176,13 @@ describe('completing quests', () => {
 describe('easier variants', () => {
   const pool = QUEST_POOL.filter((t) => ['steps', 'pushups', 'plank', 'stretch', 'run'].includes(t.id));
 
-  it('hands out variant titles with the same amount and XP', () => {
+  it('hands out variant titles with the same amount and less XP', () => {
     const normal = generateDay('2026-11-16', 5, 2, pool);
     const easy = generateDay('2026-11-16', 5, 2, pool, [], undefined, true);
     expect(easy.quests.map((x) => x.templateId)).toEqual(normal.quests.map((x) => x.templateId));
     easy.quests.forEach((x, i) => {
       expect(x.amount).toBe(normal.quests[i].amount);
-      expect(x.xp).toBe(normal.quests[i].xp);
+      expect(x.xp).toBe(x.easy ? Math.round(normal.quests[i].xp * 0.7) : normal.quests[i].xp);
       if (VARIANTS[x.templateId]) expect(x).toMatchObject({ title: VARIANTS[x.templateId], easy: true });
       else expect(x.easy).toBeUndefined();
     });

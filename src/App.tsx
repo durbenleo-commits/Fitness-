@@ -9,6 +9,7 @@ import { SettingsView } from './views/Settings';
 import { StatsView } from './views/Stats';
 import { Icon } from './views/Icons';
 import { Hud, TodayView } from './views/Today';
+import { UpdatePrompt } from './views/UpdatePrompt';
 import { LevelUp, Toast, Victory } from './views/ui';
 import type { Battle } from './battle';
 
@@ -58,7 +59,12 @@ export default function App() {
     if (fresh) setVictory(fresh);
   }, [state.battles]);
 
-  if (!state.profile) return <Onboarding onStart={game.startGame} />;
+  if (!state.profile) return (
+    <>
+      <Onboarding onStart={game.startGame} />
+      <UpdatePrompt />
+    </>
+  );
 
   return (
     <div className="app">
@@ -108,6 +114,7 @@ export default function App() {
       {toasts.length > 0 && levelUp === null && victory === null && <Toast key={toasts[0].id} icon={toasts[0].icon} tier={toasts[0].tier} title={toasts[0].title} onDone={dropToast} />}
       {victory !== null && levelUp === null && <Victory battle={victory} onClose={() => setVictory(null)} />}
       {levelUp !== null && <LevelUp level={levelUp} onClose={() => setLevelUp(null)} />}
+      <UpdatePrompt />
     </div>
   );
 }
