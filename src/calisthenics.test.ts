@@ -84,7 +84,7 @@ describe('calisthenics exercises', () => {
   });
 
   it('follow the equipment and jump settings', () => {
-    const ids = (p: Profile) => randomPool({ customQuests: [], disabledQuests: [], profile: p }, ALL_MASTERED).map((t) => t.id);
+    const ids = (p: Profile) => randomPool({ customQuests: [], disabledQuests: [], profile: p }, 99, ALL_MASTERED).map((t) => t.id);
     const plain = ids({ ...profile, equipment: [] });
     expect(plain).toContain('dips');
     expect(plain).toContain('jumpsquats');
@@ -96,7 +96,7 @@ describe('calisthenics exercises', () => {
   });
 
   it('can be switched off', () => {
-    const pool = randomPool({ customQuests: [], disabledQuests: ['dips', 'pistol'], profile }, ALL_MASTERED);
+    const pool = randomPool({ customQuests: [], disabledQuests: ['dips', 'pistol'], profile }, 99, ALL_MASTERED);
     expect(pool.map((t) => t.id)).not.toContain('dips');
     expect(pool.map((t) => t.id)).not.toContain('pistol');
   });
@@ -129,7 +129,7 @@ describe('calisthenics exercises', () => {
   });
 
   it('are in the arena pool unless they need missing gear', () => {
-    const ids = battlePool({ ...emptyState(), profile: { ...profile, equipment: [] } }, ALL_MASTERED).map((t) => t.id);
+    const ids = battlePool({ ...emptyState(), profile: { ...profile, equipment: [] } }, 99, ALL_MASTERED).map((t) => t.id);
     expect(ids).toContain('handstand');
     expect(ids).not.toContain('chinups');
     const s = ensureBattles({ ...emptyState(), profile }, TODAY, 1);

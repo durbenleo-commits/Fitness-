@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ensureBattles } from './battle';
+import { ensureBattles, type Battle } from './battle';
 import {
+  EXERCISE_MIN_LEVEL,
   GOAL_EXTRAS,
+  lockInfo,
+  stateLevel,
   QUEST_POOL,
   acknowledgeUnlocks,
   dayFor,
@@ -117,8 +120,8 @@ describe('gate in extras, joker and arena', () => {
 
   it('mastered prerequisites let the exercise come up', () => {
     const s = state({ days: history({ pushups: 10 }) });
-    const seen = new Set(dates.flatMap((d) => extraQuests(dayFor(s, d, 1)).map((q) => q.templateId)));
-    expect(seen.has('dips') || seen.has('diamond')).toBe(true);
+    const seen = new Set(dates.flatMap((d) => extraQuests(dayFor(s, d, 5)).map((q) => q.templateId)));
+    expect(seen.has('dips') && seen.has('diamond')).toBe(true);
     expect(seen.has('pike')).toBe(false);
   });
 
@@ -169,17 +172,17 @@ describe('training goal', () => {
     const s = setTrainingGoal(state({ days: history({ legraises: 10, pushups: 10 }) }), 'lsit');
     expect(goalSteps(s).map((t) => t.id)).toEqual(['hollow', 'dips']);
     for (const date of dates) {
-      const day = dayFor(s, date, 3);
+      const day = dayFor(s, date, 5);
       const ids = extraQuests(day).map((q) => q.templateId);
       expect(ids).toContain('hollow');
       expect(ids).toContain('dips');
       expect(ids.filter((id) => ['hollow', 'dips'].includes(id)).length).toBeLessThanOrEqual(GOAL_EXTRAS);
       expect(new Set(ids).size).toBe(ids.length);
-      expect(dayFor(s, date, 3)).toEqual(day);
+      expect(dayFor(s, date, 5)).toEqual(day);
     }
     // without a goal, hollow is not in every day
     const free = { ...s, profile: profile };
-    expect(dates.every((d) => extraQuests(dayFor(free, d, 3)).some((q) => q.templateId === 'hollow'))).toBe(false);
+    expect(dates.every((d) => extraQuests(dayFor(free, d, 5)).some((q) => q.templateId === 'hollow'))).toBe(false);
   });
 
   it('respects equipment and switched-off exercises', () => {
@@ -231,5 +234,68 @@ describe('saves and the unlock note', () => {
   it('leaves out unlocks the equipment does not allow', () => {
     const s = state({ days: history({ pullups: 3 }), profile: { ...profile, equipment: [] } });
     expect(newlyUnlocked(s).map((t) => t.id)).not.toContain('chinups');
+  });
+});
+
+/** XP for reaching a level (sum of xpToNext). */
+const xpFor = (level: number) => Array.from({ length: level - 1 }, (_, i) => 100 + 25 * i).reduce((a, b) => a + b, 0);
+/** A state without days at exactly `level`, through one won fight worth the XP. */
+function atLevel(s: GameState, level: number): GameState {
+  const fight = { id: 'xp', enemyId: 'x', name: 'X', icon: '', taunt: '', attr: 'staerke', boss: false, elite: false, start: '2025-01-01', end: '2025-01-01', xp: xpFor(level), phases: [], defeatedOn: '2025-01-01' } as unknown as Battle;
+  return { ...s, battles: [...s.battles, fight] };
+}
+
+describe('level gate and mastery together', () => {
+  it('keeps the level table and needs both gates', () => {
+    expect(EXERCISE_MIN_LEVEL.lsit).toBe(20);
+    expect(EXERCISE_MIN_LEVEL.handstand).toBe(30);
+    const ids = (level: number, points: Record<string, number>) => randomPool(state(), level, points).map((t) => t.id);
+    expect(ids(1, ALL_MASTERED)).not.toContain('dips'); // level 3 missing
+    expect(ids(3, {})).not.toContain('dips'); // pushups Stufe 2 missing
+    expect(ids(3, { pushups: 10 })).toContain('dips');
+    expect(ids(99, ALL_MASTERED)).toEqual(expect.arrayContaining(GATED_IDS));
+    // free exercises need neither
+    expect(ids(1, {})).toEqual(expect.arrayContaining(['calves', 'bridge', 'superman', 'legraises', 'lunges']));
+  });
+
+  it('lockInfo names only what is missing', () => {
+    expect(lockInfo({ hollow: 12, dips: 10 }, 7, 'lsit')).toEqual({ level: 20, unmet: [{ id: 'hollow', tier: 3 }] });
+    expect(lockInfo(ALL_MASTERED, 7, 'lsit')).toEqual({ level: 20, unmet: [] });
+    expect(lockInfo({}, 25, 'lsit').level).toBeNull();
+    expect(lockInfo({}, 1, 'calves')).toEqual({ level: null, unmet: [] });
+  });
+
+  it('state level comes from the XP', () => {
+    expect(stateLevel(atLevel(state(), 7))).toBe(7);
+  });
+
+  it('the unlock note waits for both, then shows once', () => {
+    const mastered = { ...state({ days: history({ pushups: 10 }) }), seenUnlocks: [] };
+    const lvl = stateLevel(mastered);
+    // mastery met; dips needs level 3, diamond level 5
+    const open = newlyUnlocked(mastered).map((t) => t.id);
+    expect(open.includes('dips')).toBe(lvl >= 3);
+    expect(open.includes('diamond')).toBe(lvl >= 5);
+    const high = { ...mastered, battles: atLevel(state(), 6).battles };
+    expect(newlyUnlocked(high).map((t) => t.id).sort()).toEqual(['diamond', 'dips']);
+    expect(newlyUnlocked(acknowledgeUnlocks(high))).toEqual([]);
+    // level alone does nothing without mastery
+    expect(newlyUnlocked({ ...atLevel(state(), 40), seenUnlocks: [] })).toEqual([]);
+  });
+
+  it('training goal: level missing only means no steps, and the goal is reached with the level', () => {
+    const s = setTrainingGoal(atLevel(state(), 10), 'lsit'); // needs level 20, hollow 3, dips 2
+    expect(s.profile?.trainingGoal).toBe('lsit');
+    const mastered = { ...s, days: history({ hollow: 25, dips: 10 }) };
+    expect(goalSteps(mastered)).toEqual([]);
+    expect(reachedGoal(mastered)).toBeNull();
+    const leveled = { ...mastered, battles: atLevel(state(), 30).battles };
+    expect(reachedGoal(leveled)?.id).toBe('lsit');
+    expect(acknowledgeUnlocks(leveled).profile?.trainingGoal).toBeUndefined();
+    // a step that is mastery-open but below its level is not handed out
+    const early = setTrainingGoal(atLevel(state(), 2), 'lsit');
+    const withPush = { ...early, days: history({ pushups: 10, legraises: 10 }) };
+    const lvl = stateLevel(withPush);
+    expect(goalSteps(withPush).map((t) => t.id)).toEqual([...(lvl >= 5 ? ['hollow'] : []), ...(lvl >= 3 ? ['dips'] : [])]);
   });
 });

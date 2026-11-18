@@ -335,7 +335,7 @@ export function ensureBattles(state: GameState, today: string, level: number): G
   if (!state.profile) return state;
   const add: Battle[] = [];
   const has = (id: string) => state.battles.some((b) => b.id === id);
-  const pool = battlePool(state); // gated by mastery: locked exercises are swapped like missing gear
+  const pool = battlePool(state, level); // gated by level and mastery: locked exercises are swapped like missing gear
   const easy = !!state.profile.easyVariants;
   const todays = enemiesOf(state.battles, today);
   if (todays.length === 0) {

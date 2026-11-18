@@ -104,7 +104,7 @@ describe('day structure: Pflicht and Extra', () => {
   it('extras respect equipment, no jumping and disabled quests; core quests ignore them', () => {
     const p: Profile = { ...profile, equipment: [], noJumping: true };
     const state: GameState = { ...emptyState(), profile: p, disabledQuests: ['pushups', 'squats', 'plank', 'situps'] };
-    const allowed = new Set(randomPool(state, ALL_MASTERED).map((q) => q.id));
+    const allowed = new Set(randomPool(state, 99, ALL_MASTERED).map((q) => q.id));
     for (const d of dates) {
       const day = dayFor(state, d, 1);
       expect(day.quests.map((q) => q.templateId).slice(0, 4)).toEqual([...CORE_QUEST_IDS]);
@@ -197,7 +197,7 @@ describe('swap joker', () => {
     expect(isSwappable(day, extra)).toBe(true);
     const done = completeQuest(day, extra.id);
     expect(isSwappable(done, done.quests.find((q) => q.id === extra.id)!)).toBe(false);
-    const swapped = rerollQuest(day, extra.id, 1, 2, randomPool({ ...emptyState(), profile }, ALL_MASTERED));
+    const swapped = rerollQuest(day, extra.id, 1, 2, randomPool({ ...emptyState(), profile }, 99, ALL_MASTERED));
     const idx = day.quests.indexOf(extra);
     expect(swapped.quests[idx].extra).toBe(true);
     expect(swapped.quests[idx].templateId).not.toBe(extra.templateId);

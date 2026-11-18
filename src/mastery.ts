@@ -102,16 +102,23 @@ export const unlockedGatedIds = (points: MasteryPoints) => GATED_IDS.filter((id)
 /**
  * Exercises to train for a goal, best first: for each unmet requirement the exercise itself
  * when it is unlocked, otherwise (a chain) the requirements of that one, deepest first.
- * `skip` leaves out exercises that come anyway (core quests). Empty when the goal is unlocked.
+ * `skip` leaves out exercises that come anyway (core quests); `open` says whether an exercise may
+ * come up now (default: its prerequisites are met; game.ts also checks the level). Empty when
+ * the goal's prerequisites are met.
  */
-export function trainingSteps(points: MasteryPoints, goal: string, skip: (id: string) => boolean = () => false): string[] {
+export function trainingSteps(
+  points: MasteryPoints,
+  goal: string,
+  skip: (id: string) => boolean = () => false,
+  open: (id: string) => boolean = (id) => isUnlocked(points, id),
+): string[] {
   const found: { id: string; depth: number }[] = [];
   const seen = new Set<string>();
   const visit = (id: string, depth: number) => {
     if (seen.has(id)) return;
     seen.add(id);
     for (const r of unmetRequirements(points, id)) {
-      if (isUnlocked(points, r.id)) {
+      if (open(r.id)) {
         if (!skip(r.id) && !found.some((f) => f.id === r.id)) found.push({ id: r.id, depth });
       } else visit(r.id, depth + 1);
     }
