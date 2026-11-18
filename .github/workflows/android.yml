@@ -49,6 +49,21 @@ jobs:
             -PversionName=0.3.${{ github.run_number }}
           cp app/build/outputs/apk/release/app-release.apk ../questfit.apk
 
+      - name: Release notes
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          {
+            echo "Android-App von Questfit, Build ${{ github.run_number }}."
+            echo
+            echo "Installieren: questfit.apk auf dem Handy herunterladen und öffnen. Android fragt beim ersten Mal,"
+            echo "ob der Browser Apps installieren darf. Neue Versionen installieren sich über die alte, dein Fortschritt bleibt."
+            if printf '%s' "$COMMIT_MESSAGE" | grep -qiF '[pflicht]'; then
+              echo
+              echo "[pflicht]"
+            fi
+          } > release-notes.md
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-${{ github.run_number }}
@@ -56,8 +71,4 @@ jobs:
           target_commitish: ${{ github.sha }}
           make_latest: true
           files: questfit.apk
-          body: |
-            Android-App von Questfit, Build ${{ github.run_number }}.
-
-            Installieren: questfit.apk auf dem Handy herunterladen und öffnen. Android fragt beim ersten Mal,
-            ob der Browser Apps installieren darf. Neue Versionen installieren sich über die alte, dein Fortschritt bleibt.
+          body_path: release-notes.md

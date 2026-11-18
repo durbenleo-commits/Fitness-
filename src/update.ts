@@ -77,3 +77,25 @@ export function parseStoredRelease(raw: string | null, own: number): ReleaseInfo
     return null;
   }
 }
+
+/** Remembered required build from storage; 0 if none, malformed, or the own build has caught up. */
+export function parseRequiredBuild(raw: string | null, own: number): number {
+  if (!raw) return 0;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) && n > own ? n : 0;
+}
+
+/**
+ * Combine a freshly fetched latest release with the remembered required build.
+ * A required release stays required until the own build reaches it, even if a newer optional release appears.
+ */
+export function applyCheck(
+  latest: ReleaseInfo,
+  prevRequiredBuild: number,
+  own: number,
+): { release: ReleaseInfo | null; requiredBuild: number } {
+  let requiredBuild = prevRequiredBuild > own ? prevRequiredBuild : 0;
+  if (latest.required && latest.build > own) requiredBuild = Math.max(requiredBuild, latest.build);
+  if (!isNewer(latest.build, own)) return { release: null, requiredBuild: 0 };
+  return { release: { ...latest, required: requiredBuild > own }, requiredBuild };
+}

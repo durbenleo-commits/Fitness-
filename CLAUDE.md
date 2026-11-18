@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Fitness-App als Videospiel: „Questfit“. Besitzer: Leo (GitHub `durbenleo-commits`, Repo `Fitness-`, privat).
+Fitness-App als Videospiel: „Questfit“. Besitzer: Leo (GitHub `durbenleo-commits`, Repo `Fitness-`, öffentlich).
 Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf Englisch.
 
 ## Was die App ist
@@ -40,7 +40,8 @@ Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf E
 
 - Jeder Push auf `main` startet den Workflow „Android APK“: Tests, Build, signierte APK, Release „Questfit N“.
 - Leo installiert über `https://github.com/durbenleo-commits/Fitness-/releases/latest` (Update über die alte App).
-- „Deploy to GitHub Pages“ läuft nur von Hand: Das Repo ist privat, Pages ist aus.
+- „Deploy to GitHub Pages“ läuft nur von Hand: Das Repo ist öffentlich, Pages ist aus.
+- Die App prüft beim Start auf neue Releases; „[pflicht]“ in der Commit-Nachricht macht das Update zur Pflicht.
 - Erst sagen, dass eine neue Version da ist, wenn der Release wirklich existiert (Actions/Releases prüfen).
 
 ## Befehle

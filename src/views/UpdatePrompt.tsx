@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { RELEASE_API, isNewer, ownBuild, parseRelease, parseStoredRelease, shouldCheck, type ReleaseInfo } from '../update';
+import { RELEASE_API, applyCheck, ownBuild, parseRelease, parseRequiredBuild, parseStoredRelease, shouldCheck, type ReleaseInfo } from '../update';
 
 const STORAGE_KEY = 'questfit.update.lastCheck';
 const RELEASE_KEY = 'questfit.update.release';
+const REQUIRED_KEY = 'questfit.update.requiredBuild';
 const TIMEOUT_MS = 8000;
 
 function readLast(): number | null {
@@ -22,9 +23,27 @@ function writeLast(t: number) {
   }
 }
 
+function readRequired(own: number): number {
+  try {
+    return parseRequiredBuild(localStorage.getItem(REQUIRED_KEY), own);
+  } catch {
+    return 0;
+  }
+}
+
+function writeRequired(build: number) {
+  try {
+    if (build > 0) localStorage.setItem(REQUIRED_KEY, String(build));
+    else localStorage.removeItem(REQUIRED_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 function readStored(own: number): ReleaseInfo | null {
   try {
-    return parseStoredRelease(localStorage.getItem(RELEASE_KEY), own);
+    const r = parseStoredRelease(localStorage.getItem(RELEASE_KEY), own);
+    return r && readRequired(own) > own ? { ...r, required: true } : r;
   } catch {
     return null;
   }
@@ -39,16 +58,16 @@ function writeStored(r: ReleaseInfo | null) {
   }
 }
 
-/** Fetch the latest release; null on any error (offline, rate limit, bad data). */
-async function fetchLatest(): Promise<ReleaseInfo | null> {
+/** Fetch the latest release. undefined = request failed (offline, rate limit); null = answered but not one of our releases. */
+async function fetchLatest(): Promise<ReleaseInfo | null | undefined> {
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(RELEASE_API, { signal: ctrl.signal, headers: { Accept: 'application/vnd.github+json' } });
-    if (!res.ok) return null;
+    if (!res.ok) return undefined;
     return parseRelease(await res.json());
   } catch {
-    return null;
+    return undefined;
   } finally {
     window.clearTimeout(timer);
   }
@@ -67,16 +86,14 @@ export function UpdatePrompt() {
     if (own === 0) return;
     const now = Date.now();
     if (!shouldCheck(readLast(), now)) return;
-    writeLast(now);
     const latest = await fetchLatest();
-    if (!latest) return; // error: keep whatever is remembered
-    if (isNewer(latest.build, own)) {
-      writeStored(latest);
-      setRelease(latest);
-    } else {
-      writeStored(null);
-      setRelease(null);
-    }
+    if (latest === undefined) return; // failed: keep what is remembered and do not use up the throttle
+    writeLast(now);
+    if (!latest) return;
+    const { release: next, requiredBuild } = applyCheck(latest, readRequired(own), own);
+    writeRequired(requiredBuild);
+    writeStored(next);
+    setRelease(next);
   }, [own]);
 
   useEffect(() => {

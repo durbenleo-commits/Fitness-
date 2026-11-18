@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHECK_INTERVAL_MS, RELEASE_PAGE, isNewer, ownBuild, parseBuild, parseRelease, parseStoredRelease, shouldCheck } from './update';
+import { CHECK_INTERVAL_MS, RELEASE_PAGE, applyCheck, isNewer, parseRequiredBuild, ownBuild, parseBuild, parseRelease, parseStoredRelease, shouldCheck } from './update';
 
 describe('update check', () => {
   it('parses apk tags', () => {
@@ -61,4 +61,27 @@ describe('update check', () => {
     expect(parseStoredRelease('{bad', 5)).toBeNull();
     expect(parseStoredRelease(JSON.stringify({ build: 8, url: 'http://x' }), 5)).toBeNull();
   });
+
+  it('remembers a required build until the own build reaches it', () => {
+    const req = { build: 8, required: true, url: RELEASE_PAGE };
+    const opt = { build: 10, required: false, url: RELEASE_PAGE };
+    const a = applyCheck(req, 0, 5);
+    expect(a).toEqual({ release: req, requiredBuild: 8 });
+    // newer optional release: newest shown, still not dismissable
+    const b = applyCheck(opt, a.requiredBuild, 5);
+    expect(b.release).toEqual({ ...opt, required: true });
+    expect(b.requiredBuild).toBe(8);
+    // own build reached the required one: optional again
+    expect(applyCheck(opt, 8, 8)).toEqual({ release: opt, requiredBuild: 0 });
+    // up to date: nothing left
+    expect(applyCheck(opt, 8, 10)).toEqual({ release: null, requiredBuild: 0 });
+  });
+
+  it('parses the stored required build', () => {
+    expect(parseRequiredBuild('8', 5)).toBe(8);
+    expect(parseRequiredBuild('8', 8)).toBe(0);
+    expect(parseRequiredBuild(null, 5)).toBe(0);
+    expect(parseRequiredBuild('x', 5)).toBe(0);
+  });
+
 });
