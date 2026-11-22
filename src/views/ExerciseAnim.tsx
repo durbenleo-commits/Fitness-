@@ -619,13 +619,15 @@ export interface ExerciseAnimProps {
   active?: boolean;
   /** Freeze on this cycle time (0..1) instead of playing. For still images and tests. */
   freezeAt?: number;
+  /** Show the Normal/Leichter switch and let a tap on the picture switch. Default true; false when the version is chosen elsewhere. */
+  switchable?: boolean;
 }
 
 /**
  * Looping animation of one exercise. Tapping the picture or the Normal/Leichter switch changes the variant.
  * It only animates while visible and active; with reduced motion it shows a still pose.
  */
-export function ExerciseAnim({ exerciseId, easy, onEasyChange, active = true, freezeAt }: ExerciseAnimProps) {
+export function ExerciseAnim({ exerciseId, easy, onEasyChange, active = true, freezeAt, switchable = true }: ExerciseAnimProps) {
   const def = EXERCISE_ANIMS[exerciseId];
   const svgRef = useRef<SVGSVGElement>(null);
   const puppetRef = useRef<Puppet | null>(null);
@@ -692,20 +694,23 @@ export function ExerciseAnim({ exerciseId, easy, onEasyChange, active = true, fr
         ref={svgRef}
         className="xanim-svg"
         role="img"
-        aria-label={`${variant.name}: Animation. Tippen wechselt zwischen normal und leichter.`}
-        onClick={() => choose(!isEasy)}
+        aria-label={switchable ? `${variant.name}: Animation. Tippen wechselt zwischen normal und leichter.` : `${variant.name}: Animation`}
+        onClick={switchable ? () => choose(!isEasy) : undefined}
+        style={switchable ? undefined : { cursor: 'default' }}
       />
-      <div className="xanim-bar">
-        <div className="xanim-switch" role="group" aria-label="Variante">
-          <button type="button" aria-pressed={!isEasy} onClick={() => choose(false)}>
-            Normal
-          </button>
-          <button type="button" aria-pressed={isEasy} onClick={() => choose(true)}>
-            Leichter
-          </button>
+      {switchable && (
+        <div className="xanim-bar">
+          <div className="xanim-switch" role="group" aria-label="Variante">
+            <button type="button" aria-pressed={!isEasy} onClick={() => choose(false)}>
+              Normal
+            </button>
+            <button type="button" aria-pressed={isEasy} onClick={() => choose(true)}>
+              Leichter
+            </button>
+          </div>
+          <span className="xanim-hint">{reduced ? 'Standbild' : 'Antippen zum Wechseln'}</span>
         </div>
-        <span className="xanim-hint">{reduced ? 'Standbild' : 'Antippen zum Wechseln'}</span>
-      </div>
+      )}
     </div>
   );
 }

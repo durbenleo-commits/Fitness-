@@ -1237,10 +1237,6 @@ input:focus, select:focus { outline: 2px solid var(--signal); outline-offset: 2p
 .sheet p { margin: 0; }
 
 .proof-sheet { display: flex; flex-direction: column; gap: 0.9rem; }
-.proof-head { display: flex; align-items: center; gap: 0.8rem; }
-.proof-head span { display: flex; flex-direction: column; gap: 0.1rem; }
-.proof-head strong { font-size: 1.1rem; }
-.proof-head small { color: var(--chalk-dim); font-size: 0.9rem; }
 .proof-progress { padding: 0.85rem 0.9rem; border-radius: 16px; background: rgba(13, 11, 41, 0.55); box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.4); }
 .proof-value { color: var(--chalk-dim); font-weight: 600; }
 .proof-value .display { font-size: 1.8rem; color: var(--chalk); margin-right: 0.15rem; }
@@ -1357,13 +1353,59 @@ input:focus, select:focus { outline: 2px solid var(--signal); outline-offset: 2p
 
 /* ---------- Pflicht and Extra, up to 2× ---------- */
 
-/* Today: the two quest groups. Pflicht keeps the day bonus and the streak; extras are optional. */
-.quest-section { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.1rem 0.8rem; margin: 0 0 0.7rem; }
-.quest-section h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 1.05rem; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 0.45rem; }
-.quest-section > span { font-size: 0.85rem; font-weight: 600; color: var(--chalk-dim); }
-.quest-section.extra { margin-top: 1.8rem; }
-.quest-section.extra h2 { color: var(--chalk-dim); }
-.quest-section-count { font-family: var(--font-body); font-size: 0.8rem; font-weight: 700; padding: 0.05rem 0.5rem; border-radius: 999px; background: var(--edge); color: var(--chalk-dim); }
+/* Today: the two quest groups. Pflicht keeps the day bonus and the streak; extras are optional.
+   The header is a button that folds the list away; the count stays visible when folded. */
+.quest-section-h { margin: 0 0 0.5rem; font-size: 1rem; font-weight: 400; }
+.quest-section-h.extra { margin-top: 1.4rem; }
+.quest-section {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.3rem 0.2rem 0.3rem 0.1rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.quest-section-title { font-family: var(--font-display); font-weight: 400; font-size: 1.05rem; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 0.45rem; white-space: nowrap; }
+.quest-section-sub { font-size: 0.85rem; font-weight: 600; color: var(--chalk-dim); text-align: right; line-height: 1.2; }
+.quest-section-chevron { color: var(--chalk-dim); transition: transform 0.2s ease-out; }
+.quest-section.folded .quest-section-chevron { transform: rotate(-90deg); }
+.quest-section-h.extra .quest-section-title { color: var(--chalk-dim); }
+.quest-section-count { font-family: var(--font-body); font-size: 0.8rem; font-weight: 700; padding: 0.05rem 0.5rem; border-radius: 999px; background: var(--edge); color: var(--chalk-dim); letter-spacing: 0; }
+.quest-section-count.all { background: rgba(255, 210, 63, 0.18); color: var(--signal); }
+/* A folded group sits on a quiet slab, so it still reads as a list you can open. */
+.quest-section.folded { padding: 0.45rem 0.8rem; border-radius: 16px; background: rgba(13, 11, 41, 0.35); box-shadow: inset 0 0 0 2px var(--line); }
+.quest-section:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; border-radius: 14px; }
+
+/* Quest menu: what the quest is, how it is proven, the version, the guide and "Starten". */
+.qmenu { display: flex; flex-direction: column; gap: 0.9rem; }
+.qmenu-head { display: flex; align-items: center; gap: 0.8rem; }
+.qmenu-amount { flex: 1; font-weight: 700; color: var(--chalk-dim); }
+.qmenu-amount .display { font-size: 1.9rem; color: var(--chalk); }
+.qmenu-amount small { font-size: 0.95rem; }
+.qmenu-xp { flex: none; padding: 3px 10px; border-radius: 999px; background: rgba(255, 210, 63, 0.16); color: var(--signal); font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+.qmenu-proof { display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.7rem 0.85rem; border-radius: 16px; background: rgba(13, 11, 41, 0.3); box-shadow: inset 0 0 0 2px var(--line); }
+.qmenu-proof > svg { flex: none; margin-top: 2px; color: var(--signal); }
+.qmenu-proof.proof-health > svg { color: var(--ausdauer); }
+.qmenu-proof.proof-photo > svg { color: var(--intelligenz); }
+.qmenu-proof.proof-presence > svg { color: #ffb36b; }
+.qmenu-proof span { display: flex; flex-direction: column; gap: 0.15rem; }
+.qmenu-proof small { color: var(--chalk-dim); font-size: 0.88rem; font-weight: 600; line-height: 1.3; }
+.qmenu-variant { display: flex; flex-direction: column; gap: 0.5rem; }
+.qmenu-label { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--chalk-dim); }
+.qmenu-variant .segmented button { display: flex; flex-direction: column; align-items: center; gap: 0.1rem; padding: 0.6rem 0.4rem; font-size: 1rem; }
+.qmenu-variant .segmented small { font-size: 0.78rem; font-weight: 600; opacity: 0.85; }
+.qmenu-note { color: var(--chalk-dim); font-size: 0.92rem; }
+/* "Starten" stays reachable while the guide is open. */
+.qmenu-start { position: sticky; bottom: 0; z-index: 1; padding: 1.1rem 0 0.9rem; margin: -0.8rem 0 -0.8rem; background: linear-gradient(180deg, rgba(34, 31, 92, 0) 0%, var(--pitch-lo) 45%); }
+.qmenu-start .primary { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 0.55rem; font-size: 1.2rem; padding: 1.05rem 1.2rem; }
+.qmenu .proof-sheet { gap: 0.8rem; }
 /* Extras sit a little lower: same pieces, quieter edge. */
 .quests.extras .quest:not(.done) .quest-main { background: linear-gradient(180deg, #2c2a78, #25236a); }
 

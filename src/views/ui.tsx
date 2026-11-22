@@ -1,8 +1,9 @@
-import { useEffect, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Battle } from '../battle';
 import type { HealthMetric, Proof, ProofKind } from '../proof';
 import { Badge3D, Icon, type IconName } from './Icons';
 import { Sprite } from './Sprites';
+import { useBackClose } from './overlayStack';
 import { ATTR_LABEL, BOSS_ATTR_POINTS, DEFAULT_EQUIPMENT, ENEMY_ATTR_POINTS, EQUIPMENT, rankFor, type Equipment } from '../game';
 
 export function Segmented<T extends string | number>(props: {
@@ -22,6 +23,7 @@ export function Segmented<T extends string | number>(props: {
 }
 
 export function LevelUp({ level, onClose }: { level: number; onClose: () => void }) {
+  useBackClose(onClose);
   const rankChanged = rankFor(level) !== rankFor(level - 1);
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="lvlup-title" onClick={onClose}>
@@ -58,6 +60,7 @@ export function Toast({ icon, tier, title, onDone }: { icon: IconName; tier: 'br
 }
 
 export function Victory({ battle: b, onClose }: { battle: Battle; onClose: () => void }) {
+  useBackClose(onClose);
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="victory-title" onClick={onClose}>
       <div className="lvlup" onClick={(e) => e.stopPropagation()}>
@@ -107,13 +110,9 @@ export function EquipmentPicker(props: {
   );
 }
 
-/** Bottom sheet over the current screen. Tapping the dimmed area closes it. */
+/** Bottom sheet over the current screen. Tapping the dimmed area, Escape and back (browser or Android) close it. */
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useBackClose(onClose);
   return (
     <div className="overlay sheet-overlay" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
@@ -166,3 +165,30 @@ export function fmtTime(seconds: number): string {
 
 /** A number in German style, with at most one decimal. */
 export const fmtNum = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
+
+/**
+ * An on/off view setting remembered on this device (open sections, guide shown). Only a convenience:
+ * the browser may refuse storage, then it falls back to `initial` and still works for the session.
+ */
+export function useDeviceFlag(key: string, initial: boolean): [boolean, (on: boolean) => void] {
+  const [on, setOn] = useState(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw === '1' ? true : raw === '0' ? false : initial;
+    } catch {
+      return initial;
+    }
+  });
+  const set = useCallback(
+    (next: boolean) => {
+      setOn(next);
+      try {
+        localStorage.setItem(key, next ? '1' : '0');
+      } catch {
+        // storage blocked: keep the in-memory value
+      }
+    },
+    [key],
+  );
+  return [on, set];
+}

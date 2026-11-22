@@ -12,6 +12,9 @@ Leo schreibt Deutsch. App-Texte sind Deutsch; Code, Kommentare und Commits auf E
   Alte Tage ohne Extras zählen weiter komplett als Pflicht.
 - Jede Quest geht bis 2×: mehr XP (bis doppelt) und bei 2× ein Bonus-Attributpunkt. Die Kamera zählt über das Ziel
   hinaus bis 2×, Samsung Health und Lesen zählen automatisch mit. Erledigte Quests: „Mehr machen“ oder „Zurücknehmen“.
+- Heute: Pflicht und Extra lassen sich einklappen (Kopf zeigt weiter z. B. „3/5“; Pflicht offen, Extra zu, pro Gerät
+  gemerkt). Antippen einer offenen Quest öffnet ihr Menü (`views/QuestMenu.tsx`): Menge, Nachweis, Normal/Leichter,
+  Anleitung zum Aufklappen und „Starten“. Arena-Angriffe öffnen dasselbe Menü („Angreifen“).
 - Arena: bis zu 3 Gegner pro Tag, Wochen-Boss (Mo–So, 3–4 Phasen, immer mit einer Schritte-Phase). Treffer = per Kamera
   gezählte Wiederholungen/Zeit oder Daten aus Samsung Health.
 - Erfolge (Bronze/Silber/Gold), Werte mit Klasse (Krieger, Läufer, …) und Vergleich 7 Tage / seit Tag 1.
@@ -80,6 +83,7 @@ src/views/Hub.tsx    Menü: gruppierte Zeilen mit Kurzinfo (Meisterschaft, Erfol
 src/views/Mastery.tsx  Meisterschaft: Trainingsziel, Wege (SKILL_PATHS in mastery.ts) Stufe für Stufe, „Als Ziel“
 src/views/Exercises.tsx  Quests & Übungen: Pflicht-Liste, Extras an/aus (mit Anleitung), eigene Quests
 src/views/NavBar.tsx   Leiste einer Unterseite: Zurück + kleiner Titel beim Scrollen
+src/views/QuestMenu.tsx  Menü hinter Quest / Arena-Angriff: Nachweis, Ausführung, Anleitung, Starten
 src/views/Reading.tsx  Lese-Sheet: Buch anlegen (mit Cover-Foto und Seitenzahl), „Buch bearbeiten“, Seite + Foto eintragen, Buch beenden
 src/views/Icons.tsx  Linien-Icons und 3D-Abzeichen
 src/views/Sprites.tsx  die 14 Monster als SVG

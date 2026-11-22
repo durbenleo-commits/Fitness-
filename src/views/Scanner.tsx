@@ -15,6 +15,7 @@ import {
   type ScanState,
 } from '../pose';
 import { Icon } from './Icons';
+import { useBackClose } from './overlayStack';
 import { fmtTime } from './ui';
 
 // Pairs of landmarks to draw as the skeleton.
@@ -186,6 +187,7 @@ export function Scanner(props: {
 
   // Closing after 1× keeps what was counted: the quest is done.
   const close = () => (max && reached && amount > base ? finish(amount) : onClose());
+  useBackClose(close); // back (browser or Android) works like the close button
 
   // A small buzz for every counted rep, and when the stretch routine moves to the next pose.
   const lastReps = useRef(0);

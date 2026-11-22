@@ -32,14 +32,14 @@ import type { Game } from '../store';
 import { PRESENCE, STRETCH_FOCUS } from '../pose';
 import { healthProgress, proofFor, questMaxTarget, questTarget, scanToAchieved, type HealthMetric, type ProofKind } from '../proof';
 import { pagesReadOn } from '../reading';
-import { hasExerciseAnim } from '../anim/exercises';
 import { AttrTile, Badge3D, Icon } from './Icons';
-import { ExerciseGuide } from './ExerciseGuide';
+import { GuideDisclosure } from './ExerciseGuide';
+import { QuestMenu } from './QuestMenu';
 import { ReadingSheet } from './Reading';
 import { Scanner } from './Scanner';
 import { Sprite } from './Sprites';
 import { SEASON_OPTIONS } from './Onboarding';
-import { METRIC_HINT, PROOF_ICON, PROOF_LABEL, Segmented, Sheet, fmtNum } from './ui';
+import { METRIC_HINT, PROOF_ICON, PROOF_LABEL, Segmented, Sheet, fmtNum, useDeviceFlag } from './ui';
 
 export function Hud(props: { profile: Profile; level: number; intoLevel: number; needed: number; streak: number; today: string }) {
   const { profile, level, intoLevel, needed, streak, today } = props;
@@ -84,25 +84,36 @@ export function Hud(props: { profile: Profile; level: number; intoLevel: number;
 type Flow =
   // target and max (2×) are in the scanner's units; base is what already counts (doing more on a done quest)
   | { kind: 'scan'; quest: QuestInstance; scanId: string; target: number; max: number; base: number; perUnit?: number }
-  | { kind: 'health'; quest: QuestInstance; metric: HealthMetric }
   | { kind: 'read' }
   | { kind: 'done'; quest: QuestInstance }
-  | { kind: 'guide'; questId: string };
+  // the menu of an open quest: version, guide and "Starten" (by id, so it shows the live quest)
+  | { kind: 'menu'; questId: string };
 
 export function TodayView({ game, today, onOpenArena }: { game: Game; today: string; onOpenArena: () => void }) {
   const { state } = game;
   const [swapping, setSwapping] = useState(false);
-  const [flow, setFlow] = useState<Flow | null>(null);
+  // The open flow belongs to the day it was opened on: quest ids repeat from day to day (`${id}-${slot}`),
+  // so after midnight it would point at the new day's quest. It is dropped when the day changes, except the
+  // reading entry: it holds no quest id (ReadingSheet and onCompleted look things up by the current day).
+  const [flowState, setFlowState] = useState<{ day: string; flow: Flow } | null>(null);
+  const flow = flowState && (flowState.day === today || flowState.flow.kind === 'read') ? flowState.flow : null;
+  const setFlow = (f: Flow | null) => setFlowState(f ? { day: today, flow: f } : null);
+  useEffect(() => {
+    setFlowState((s) => (s && s.day !== today && s.flow.kind !== 'read' ? null : s));
+  }, [today]);
   const [filter, setFilterState] = useState<'open' | 'done'>('open');
   // Quests ticked off while looking at "Offen" stay in view until the tab changes,
   // so the check animation is visible instead of the card vanishing.
   const [justDone, setJustDone] = useState<string[]>([]);
+  // Pflicht and Extra fold away; remembered on this device (Extra starts folded)
+  const [requiredOpen, setRequiredOpen] = useDeviceFlag('questfit.ui.requiredOpen', true);
+  const [extraOpen, setExtraOpen] = useDeviceFlag('questfit.ui.extraOpen', false);
   const setFilter = (f: 'open' | 'done') => {
     setFilterState(f);
     setJustDone([]);
   };
   const markDone = (id: string) => setJustDone((l) => [...l, id]);
-  const close = useCallback(() => setFlow(null), []);
+  const close = useCallback(() => setFlowState(null), []);
   const day = state.days[today];
   if (!day || !state.profile) return null;
   const custom = state.customQuests;
@@ -153,20 +164,16 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
     });
   };
 
-  /** Tapping a quest starts its proof; a done quest offers "more" (up to 2×) or taking it back. */
+  /** "Starten" in the quest menu: the camera (or presence timer), or the reading sheet. Health quests have no start. */
   const startProof = (q: QuestInstance) => {
-    if (q.done) return setFlow({ kind: 'done', quest: q });
     const proof = proofFor(q, custom);
-    switch (proof.kind) {
-      case 'camera':
-      case 'presence':
-        return startScan(q);
-      case 'health':
-        return setFlow({ kind: 'health', quest: q, metric: proof.metric });
-      case 'photo':
-        return setFlow({ kind: 'read' });
-    }
+    if (proof.kind === 'camera' || proof.kind === 'presence') return startScan(q);
+    if (proof.kind === 'photo') return setFlow({ kind: 'read' });
   };
+
+  /** Tapping a quest opens its menu; a done quest offers "more" (up to 2×) or taking it back. */
+  const openQuest = (q: QuestInstance) => setFlow(q.done ? { kind: 'done', quest: q } : { kind: 'menu', questId: q.id });
+  const isCustom = (q: QuestInstance) => custom.some((t) => t.id === q.templateId);
 
   const row = (q: QuestInstance) => {
     const swappable = isSwappable(day, q, custom);
@@ -178,11 +185,8 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         swappable={swappable}
         proof={proofFor(q, custom).kind}
         note={questNote(state, today, q)}
-        canSwitch={!swapping && canSwitchVariant(q, custom)}
-        onSwitch={() => game.setQuestVariant(q.id, !q.easy)}
-        onGuide={!swapping && !custom.some((t) => t.id === q.templateId) && hasExerciseAnim(q.templateId) ? () => setFlow({ kind: 'guide', questId: q.id }) : undefined}
         onTap={() => {
-          if (!swapping) return startProof(q);
+          if (!swapping) return openQuest(q);
           if (!swappable) return;
           game.reroll(q.id);
           setSwapping(false);
@@ -191,10 +195,31 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
     );
   };
 
-  const list = (quests: QuestInstance[], empty: string, extra = false) => {
+  /** Sheet of a done quest. */
+  const doneSheet = (shown: QuestInstance) => {
+    // show the live quest (health data or pages may have raised it since the tap)
+    const q = day.quests.find((x) => x.id === shown.id) ?? shown;
+    return (
+      <DoneSheet
+        quest={q}
+        proof={proofFor(q, custom).kind}
+        exerciseId={isCustom(q) ? undefined : q.templateId}
+        onClose={close}
+        onMore={() => startScan(q, true)}
+        onRead={() => setFlow({ kind: 'read' })}
+        onUndo={() => {
+          game.uncheckQuest(q.id);
+          setJustDone((l) => l.filter((x) => x !== q.id));
+          setFlow(null);
+        }}
+      />
+    );
+  };
+
+  const list = (quests: QuestInstance[], empty: string, extra = false, id?: string) => {
     const shown = quests.filter(visible);
     return (
-      <ul className={`quests ${extra ? 'extras' : ''} ${swapping ? 'swapping' : ''}`}>
+      <ul id={id} className={`quests ${extra ? 'extras' : ''} ${swapping ? 'swapping' : ''}`}>
         {shown.length === 0 && <li className="empty-list">{empty}</li>}
         {shown.map(row)}
       </ul>
@@ -271,20 +296,30 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         list(required, filter === 'open' ? 'Keine offenen Quests mehr.' : 'Noch nichts erledigt. Los geht’s!')
       ) : (
         <>
-          <div className="quest-section">
-            <h2>Pflicht</h2>
-            <span>Für Tagesbonus und Serie</span>
-          </div>
-          {list(required, filter === 'open' ? 'Alle Pflicht-Quests erledigt.' : 'Noch keine Pflicht-Quest erledigt. Los geht’s!')}
+          <SectionHead
+            title="Pflicht"
+            sub="Für Tagesbonus und Serie"
+            done={done}
+            total={required.length}
+            open={requiredOpen}
+            onToggle={() => setRequiredOpen(!requiredOpen)}
+            controls="quests-required"
+          />
+          {requiredOpen &&
+            list(required, filter === 'open' ? 'Alle Pflicht-Quests erledigt.' : 'Noch keine Pflicht-Quest erledigt. Los geht’s!', false, 'quests-required')}
           {extras.length > 0 && (
             <>
-              <div className="quest-section extra">
-                <h2>
-                  Extra <span className="quest-section-count">{extrasDone}/{extras.length}</span>
-                </h2>
-                <span>Freiwillig – bringen zusätzliche XP</span>
-              </div>
-              {list(extras, filter === 'open' ? 'Alle Extras erledigt.' : 'Noch kein Extra erledigt.', true)}
+              <SectionHead
+                title="Extra"
+                sub="Freiwillig – bringen zusätzliche XP"
+                done={extrasDone}
+                total={extras.length}
+                open={extraOpen}
+                onToggle={() => setExtraOpen(!extraOpen)}
+                controls="quests-extra"
+                extra
+              />
+              {extraOpen && list(extras, filter === 'open' ? 'Alle Extras erledigt.' : 'Noch kein Extra erledigt.', true, 'quests-extra')}
             </>
           )}
         </>
@@ -320,6 +355,8 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
                 className="joker"
                 onClick={() => {
                   setFilter('open');
+                  // the extras are what can be swapped: open their group (and keep it open after the swap)
+                  if (!legacy) setExtraOpen(true);
                   setSwapping(true);
                 }}
               >
@@ -352,7 +389,32 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
           onClose={close}
         />
       )}
-      {flow?.kind === 'health' && <HealthSheet game={game} today={today} quest={flow.quest} metric={flow.metric} onClose={close} />}
+      {flow?.kind === 'menu' &&
+        (() => {
+          const q = day.quests.find((x) => x.id === flow.questId);
+          if (!q) return null;
+          // a quest that turned done while its menu was open (Samsung Health) shows its done sheet
+          if (q.done) return doneSheet(q);
+          const proof = proofFor(q, custom);
+          const builtIn = !isCustom(q);
+          return (
+            <QuestMenu
+              title={q.title}
+              attr={q.attr}
+              amount={q.amount}
+              unit={q.unit}
+              xpText={`+${q.xp} XP`}
+              proof={proof}
+              variant={{ easy: !!q.easy, onChange: canSwitchVariant(q, custom) ? (easy) => game.setQuestVariant(q.id, easy) : undefined }}
+              exerciseId={builtIn ? q.templateId : undefined}
+              startLabel={proof.kind === 'photo' ? 'Seite eintragen' : 'Starten'}
+              onStart={proof.kind === 'health' ? undefined : () => startProof(q)}
+              onClose={close}
+            >
+              {proof.kind === 'health' && <HealthInfo game={game} today={today} quest={q} metric={proof.metric} />}
+            </QuestMenu>
+          );
+        })()}
       {flow?.kind === 'read' && (
         <ReadingSheet
           game={game}
@@ -364,27 +426,7 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
           }}
         />
       )}
-      {flow?.kind === 'done' && (
-        <DoneSheet
-          // show the live quest (health data or pages may have raised it since the tap)
-          quest={day.quests.find((q) => q.id === flow.quest.id) ?? flow.quest}
-          proof={proofFor(flow.quest, custom).kind}
-          onClose={close}
-          onMore={() => startScan(day.quests.find((q) => q.id === flow.quest.id) ?? flow.quest, true)}
-          onRead={() => setFlow({ kind: 'read' })}
-          onUndo={() => {
-            game.uncheckQuest(flow.quest.id);
-            setJustDone((l) => l.filter((x) => x !== flow.quest.id));
-            setFlow(null);
-          }}
-        />
-      )}
-
-      {flow?.kind === 'guide' &&
-        (() => {
-          const q = day.quests.find((x) => x.id === flow.questId);
-          return q ? <QuestGuide quest={q} canSwitch={canSwitchVariant(q, custom)} onApply={(easy) => game.setQuestVariant(q.id, easy)} onClose={close} /> : null;
-        })()}
+      {flow?.kind === 'done' && doneSheet(flow.quest)}
 
       {enemy && (
         <button className={`arena-teaser attr-${enemy.attr} ${enemy.defeatedOn ? 'won' : ''}`} onClick={onOpenArena}>
@@ -404,6 +446,23 @@ export function TodayView({ game, today, onOpenArena }: { game: Game; today: str
         </button>
       )}
     </section>
+  );
+}
+
+/** Header of the Pflicht / Extra group: tap folds the list away; the count stays visible. */
+function SectionHead(props: { title: string; sub: string; done: number; total: number; open: boolean; onToggle: () => void; controls: string; extra?: boolean }) {
+  const { title, sub, done, total, open, onToggle, controls, extra } = props;
+  const all = total > 0 && done >= total;
+  return (
+    <h2 className={`quest-section-h ${extra ? 'extra' : ''}`}>
+      <button type="button" className={`quest-section ${open ? 'open' : 'folded'}`} aria-expanded={open} aria-controls={open ? controls : undefined} onClick={onToggle}>
+        <span className="quest-section-title">
+          {title} <span className={`quest-section-count ${all ? 'all' : ''}`}>{done}/{total}</span>
+        </span>
+        <span className="quest-section-sub">{sub}</span>
+        <Icon name="chevronDown" size={22} className="quest-section-chevron" />
+      </button>
+    </h2>
   );
 }
 
@@ -443,13 +502,10 @@ function QuestRow(props: {
   swappable: boolean;
   proof: ProofKind;
   note: string;
-  canSwitch: boolean;
-  onSwitch: () => void;
+  /** Opens the quest menu (open quests), the done sheet, or swaps in swap mode. */
   onTap: () => void;
-  /** Opens the exercise guide; missing when the quest has no animation. */
-  onGuide?: () => void;
 }) {
-  const { quest: q, swapMode, swappable, proof, note, canSwitch, onSwitch, onTap, onGuide } = props;
+  const { quest: q, swapMode, swappable, proof, note, onTap } = props;
   const xp = questXp(q);
   const doubled = isDoubled(q);
   const [burst, setBurst] = useState<{ key: number; xp: number } | null>(null);
@@ -469,7 +525,7 @@ function QuestRow(props: {
     ? `${q.title} tauschen`
     : q.done
       ? `${q.title}, erledigt${doubled ? ' (doppelt)' : ''}. Mehr machen oder zurücknehmen?`
-      : `${q.title}: Nachweis, ${PROOF_LABEL[proof]}`;
+      : `${q.title}: öffnen. Nachweis: ${PROOF_LABEL[proof]}`;
 
   return (
     <li className={`quest attr-${q.attr} ${q.done ? 'done' : ''} ${q.extra ? 'is-extra' : ''} ${swapMode && !swappable ? 'locked' : ''}`}>
@@ -503,121 +559,59 @@ function QuestRow(props: {
           </span>
         )}
       </button>
-      {(canSwitch || onGuide) && (
-        <div className="quest-tools">
-          {onGuide && (
-            <button type="button" className="guide-link" onClick={onGuide} aria-label={`${q.title}: Anleitung mit Animation`}>
-              <Icon name="play" size={16} />
-              Anleitung
-            </button>
-          )}
-          {canSwitch && (
-            <button
-              className="link-button"
-              style={{ fontSize: '0.8rem', padding: '0.25rem 0.4rem' }}
-              onClick={onSwitch}
-              aria-label={q.easy ? `${q.title}: normale Ausführung, volle XP` : `${q.title}: leichtere Ausführung, weniger XP`}
-            >
-              {q.easy ? 'Normal' : 'Leichter'}
-            </button>
-          )}
-        </div>
-      )}
     </li>
   );
 }
 
-/**
- * "Anleitung" for one quest: starts on the quest's current variant. Switching inside is a preview; while the
- * quest is open and switchable, "Diese Version nehmen" applies the shown variant to the quest.
- */
-function QuestGuide({ quest: q, canSwitch, onApply, onClose }: { quest: QuestInstance; canSwitch: boolean; onApply: (easy: boolean) => void; onClose: () => void }) {
-  const [shown, setShown] = useState(!!q.easy);
-  const differs = shown !== !!q.easy;
-  return (
-    <ExerciseGuide
-      exerciseId={q.templateId}
-      easy={!!q.easy}
-      onEasyChange={setShown}
-      onClose={onClose}
-      footer={
-        differs &&
-        (canSwitch ? (
-          <button
-            className="primary"
-            onClick={() => {
-              onApply(shown);
-              onClose();
-            }}
-          >
-            Diese Version nehmen
-          </button>
-        ) : (
-          <p className="xguide-note">Nur Vorschau: Deine Quest bleibt {q.easy ? 'leichter' : 'normal'}{q.done ? ', weil sie schon erledigt ist' : ''}.</p>
-        ))
-      }
-    />
-  );
-}
-
-/** Health quests are never ticked by hand: this explains where the number comes from. */
-function HealthSheet({ game, today, quest: q, metric, onClose }: { game: Game; today: string; quest: QuestInstance; metric: HealthMetric; onClose: () => void }) {
+/** Health quests are never ticked by hand: this explains where the number comes from (inside the quest menu). */
+function HealthInfo({ game, today, quest: q, metric }: { game: Game; today: string; quest: QuestInstance; metric: HealthMetric }) {
   const { state, health } = game;
   const value = healthProgress(q, state.health.days, today, state.customQuests) ?? 0;
   const connected = state.health.connected;
   const last = state.health.lastSync ? new Date(state.health.lastSync) : null;
   return (
-    <Sheet title={q.title} onClose={onClose}>
-      <div className="proof-sheet">
-        <div className="proof-head">
-          <Badge3D icon="heart" tone="ausdauer" size={46} />
-          <span>
-            <strong>Bestätigt von Samsung Health</strong>
-            <small>Diese Quest hakt sich von selbst ab. Von Hand geht es nicht.</small>
+    <div className="proof-sheet">
+      {connected && (
+        <div className="proof-progress">
+          <span className="proof-value">
+            <span className="display">{fmtNum(value)}</span> von {fmtNum(q.amount)} {q.unit}
+          </span>
+          <span className="proof-bar" aria-hidden>
+            <span style={{ width: `${Math.min(value / q.amount, 1) * 100}%` }} />
           </span>
         </div>
-        {connected && (
-          <div className="proof-progress">
-            <span className="proof-value">
-              <span className="display">{fmtNum(value)}</span> von {fmtNum(q.amount)} {q.unit}
-            </span>
-            <span className="proof-bar" aria-hidden>
-              <span style={{ width: `${Math.min(value / q.amount, 1) * 100}%` }} />
-            </span>
-          </div>
-        )}
-        <p className="small-text">{METRIC_HINT[metric]} Sobald Samsung Health genug meldet, ist die Quest erledigt.</p>
-        {!health.supported ? (
-          <p className="proof-note">
-            Samsung Health kann nur die Android-App lesen, nicht die Browser-Version. Installiere die neueste Questfit-APK, dann zählt es
-            automatisch.
-          </p>
-        ) : connected ? (
-          <>
-            {last && (
-              <p className="small-text">
-                Zuletzt abgeglichen: {last.toLocaleString('de-DE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-              </p>
-            )}
-            <button className="secondary" onClick={health.sync} disabled={health.syncing}>
-              {health.syncing ? 'Gleiche ab …' : 'Jetzt abgleichen'}
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="proof-note">Samsung Health ist noch nicht verbunden.</p>
-            <button className="primary" onClick={health.connect}>
-              Mit Samsung Health verbinden
-            </button>
-          </>
-        )}
-        {health.error && (
-          <p className="error" role="alert">
-            {health.error}
-          </p>
-        )}
-      </div>
-    </Sheet>
+      )}
+      <p className="small-text">{METRIC_HINT[metric]} Von Hand abhaken geht nicht.</p>
+      {!health.supported ? (
+        <p className="proof-note">
+          Samsung Health kann nur die Android-App lesen, nicht die Browser-Version. Installiere die neueste Questfit-APK, dann zählt es
+          automatisch.
+        </p>
+      ) : connected ? (
+        <>
+          {last && (
+            <p className="small-text">
+              Zuletzt abgeglichen: {last.toLocaleString('de-DE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
+          <button className="secondary" onClick={health.sync} disabled={health.syncing}>
+            {health.syncing ? 'Gleiche ab …' : 'Jetzt abgleichen'}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="proof-note">Samsung Health ist noch nicht verbunden.</p>
+          <button className="primary" onClick={health.connect}>
+            Mit Samsung Health verbinden
+          </button>
+        </>
+      )}
+      {health.error && (
+        <p className="error" role="alert">
+          {health.error}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -625,6 +619,7 @@ function HealthSheet({ game, today, quest: q, metric, onClose }: { game: Game; t
 function DoneSheet({
   quest: q,
   proof,
+  exerciseId,
   onClose,
   onMore,
   onRead,
@@ -632,6 +627,8 @@ function DoneSheet({
 }: {
   quest: QuestInstance;
   proof: ProofKind;
+  /** Built-in exercise: the guide can be opened here too (camera quests). */
+  exerciseId?: string;
   onClose: () => void;
   onMore: () => void;
   onRead: () => void;
@@ -670,9 +667,10 @@ function DoneSheet({
               Bonus-Punkt {ATTR_LABEL[q.attr]}.
             </p>
             <button className="primary" onClick={onMore}>
-              <Icon name="camera" size={20} />
+              <Icon name={proof === 'presence' ? 'timer' : 'camera'} size={20} />
               Mehr machen (bis 2×)
             </button>
+            {exerciseId && <GuideDisclosure exerciseId={exerciseId} easy={!!q.easy} />}
           </>
         ) : proof === 'health' ? (
           <p className="small-text">

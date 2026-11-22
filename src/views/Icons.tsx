@@ -37,6 +37,7 @@ const P: Record<string, JSX.Element> = {
   ),
   chevronRight: <path d="M9.5 5.5L16 12l-6.5 6.5" />,
   chevronLeft: <path d="M14.5 5.5L8 12l6.5 6.5" />,
+  chevronDown: <path d="M5.5 9.5L12 16l6.5-6.5" />,
   // a path of three steps, rising: mastery
   path: (
     <>

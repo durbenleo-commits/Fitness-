@@ -17,9 +17,8 @@ import { PRESENCE, SCANNABLE } from '../pose';
 import { phaseProof, scanTarget, scanToAmount } from '../proof';
 import type { Game } from '../store';
 import { AttrTile, Icon } from './Icons';
-import { ExerciseGuide } from './ExerciseGuide';
+import { QuestMenu } from './QuestMenu';
 import { Scanner } from './Scanner';
-import { hasExerciseAnim } from '../anim/exercises';
 import { Sprite } from './Sprites';
 
 const phaseAttr = (p: BattlePhase): QuestAttr =>
@@ -118,7 +117,9 @@ function BattleView({ battle: b, game, today }: { battle: Battle; game: Game; to
   const [hit, setHit] = useState(0);
   const [hitText, setHitText] = useState('');
   const [scan, setScan] = useState<ScanPlan | null>(null);
-  const [guide, setGuide] = useState<BattlePhase | null>(null);
+  // the menu of a move (guide and "Angreifen"), by phase id so it shows live progress
+  const [menu, setMenu] = useState<string | null>(null);
+  const menuPhase = b.phases.find((p) => p.id === menu);
 
   const attack = (phase: BattlePhase, amount: number) => {
     const before = phaseProgress(b, phase, health);
@@ -215,8 +216,7 @@ function BattleView({ battle: b, game, today }: { battle: Battle; game: Game; to
                 progress={phaseProgress(b, p, health)}
                 health={game.state.health.connected ? 'connected' : game.health.supported ? 'off' : 'browser'}
                 hasToday={p.log.some((l) => l.date === today)}
-                onCamera={() => startScan(p)}
-                onGuide={p.kind === 'exercise' && p.exerciseId && hasExerciseAnim(p.exerciseId) ? () => setGuide(p) : undefined}
+                onCamera={() => setMenu(p.id)}
                 onUndo={() => game.undoHit(b.id, p.id)}
               />
             ))}
@@ -225,7 +225,34 @@ function BattleView({ battle: b, game, today }: { battle: Battle; game: Game; to
         </div>
       )}
 
-      {guide?.exerciseId && <ExerciseGuide exerciseId={guide.exerciseId} easy={!!guide.easy} onClose={() => setGuide(null)} />}
+      {status === 'active' &&
+        menuPhase &&
+        (() => {
+          const rest = Number(Math.max(menuPhase.target - phaseProgress(b, menuPhase, health), 0).toFixed(1));
+          return (
+            <QuestMenu
+              title={menuPhase.title}
+              attr={phaseAttr(menuPhase)}
+              amount={rest}
+              amountPrefix="noch"
+              unit={menuPhase.unit}
+              proof={phaseProof(menuPhase, rest)}
+              variant={{ easy: !!menuPhase.easy }}
+              context="arena"
+              exerciseId={menuPhase.kind === 'exercise' ? menuPhase.exerciseId : undefined}
+              startLabel="Angreifen"
+              onStart={
+                rest > 0
+                  ? () => {
+                      setMenu(null);
+                      startScan(menuPhase);
+                    }
+                  : undefined
+              }
+              onClose={() => setMenu(null)}
+            />
+          );
+        })()}
 
       {scan && (
         <Scanner
@@ -255,11 +282,11 @@ function Move(props: {
   progress: number;
   health: 'connected' | 'off' | 'browser';
   hasToday: boolean;
+  /** Opens the move's menu (guide and "Angreifen"). */
   onCamera: () => void;
-  onGuide?: () => void;
   onUndo: () => void;
 }) {
-  const { phase: p, active, progress, health, hasToday, onCamera, onGuide, onUndo } = props;
+  const { phase: p, active, progress, health, hasToday, onCamera, onUndo } = props;
   const proof = phaseProof(p);
   const fromHealth = proof.kind === 'health';
   const done = progress >= p.target;
@@ -306,12 +333,6 @@ function Move(props: {
             <Icon name={proof.kind === 'presence' ? 'timer' : 'camera'} size={18} />
             Mit Kamera angreifen
           </button>
-          {onGuide && (
-            <button type="button" className="guide-link" onClick={onGuide} aria-label={`${p.title}: Anleitung mit Animation`}>
-              <Icon name="play" size={16} />
-              Anleitung
-            </button>
-          )}
         </div>
       )}
       {hasToday && !fromHealth && (

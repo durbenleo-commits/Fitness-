@@ -17,6 +17,7 @@ import { Icon } from './views/Icons';
 import { Hud, TodayView } from './views/Today';
 import { UpdatePrompt } from './views/UpdatePrompt';
 import { LevelUp, Toast, Victory } from './views/ui';
+import { closeTopOverlay, handleOverlayPop, takeOverlayEntry } from './views/overlayStack';
 import type { Battle } from './battle';
 
 type Tab = 'heute' | 'arena' | 'menu';
@@ -51,8 +52,10 @@ export default function App() {
   const tabRef = useRef(tab);
   tabRef.current = tab;
   useEffect(() => {
-    if (screenOf(window.history.state)) window.history.replaceState(null, ''); // a reload starts on Heute
+    const st = window.history.state as { qfOverlay?: unknown } | null;
+    if (screenOf(st) || st?.qfOverlay) window.history.replaceState(null, ''); // a reload starts on Heute
     const onPop = (e: PopStateEvent) => {
+      if (handleOverlayPop(e.state)) return; // back closed a sheet or the scanner: stay on this screen
       const next = screenOf(e.state);
       depthRef.current = next ? depthOf(e.state) : 0;
       setScreen(next);
@@ -65,6 +68,7 @@ export default function App() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const sub = CapApp.addListener('backButton', ({ canGoBack }) => {
+      if (closeTopOverlay()) return; // an open sheet or the scanner closes first
       if (canGoBack) window.history.back();
       else CapApp.exitApp();
     });
@@ -75,7 +79,10 @@ export default function App() {
   const openScreen = useCallback((s: Screen) => {
     if (depthRef.current === 0) menuScroll.current = window.scrollY;
     depthRef.current += 1;
-    window.history.pushState({ qfScreen: s, qfDepth: depthRef.current }, '');
+    const entry = { qfScreen: s, qfDepth: depthRef.current };
+    // opened from a sheet button: take over the sheet's history entry instead of stacking on it
+    if (takeOverlayEntry()) window.history.replaceState(entry, '');
+    else window.history.pushState(entry, '');
     setScreen(s);
     setMotion('push');
     setTab('menu');
